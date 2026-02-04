@@ -24,6 +24,7 @@ from pathlib import Path
 from data_fetcher import FundDataFetcher
 from technical_analysis import TechnicalAnalyzer
 from alerts import AlertSystem
+from database import PriceDatabase
 
 
 class FundMonitor:
@@ -40,11 +41,14 @@ class FundMonitor:
         self.data_fetcher = FundDataFetcher()
         self.analyzer = TechnicalAnalyzer()
         self.alert_system = AlertSystem()
-        
-        # Storage per dati storici (in produzione usare database)
+
+        # Database PostgreSQL per storico prezzi (persistente su Railway)
+        self.db = PriceDatabase()
+
+        # Fallback: storage locale per dati storici (se DB non disponibile)
         self.history_path = Path('data/history')
         self.history_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Carica configurazione
         self.config = self._load_config()
     
@@ -85,47 +89,42 @@ class FundMonitor:
     
     def get_fund_history(self, isin: str) -> pd.Series:
         """
-        Recupera storico prezzi per un fondo
-        
+        Recupera storico prezzi per un fondo dal database PostgreSQL
+
         Args:
             isin: Codice ISIN del fondo
-        
+
         Returns:
             Serie pandas con prezzi storici
         """
-        history_file = self.history_path / f"{isin}.json"
-        
-        # Carica storico esistente
-        history = []
-        if history_file.exists():
-            with open(history_file, 'r') as f:
-                history = json.load(f)
-        
-        # Aggiungi prezzo odierno
+        # Recupera prezzo odierno e salvalo nel database
         nav_data = self.data_fetcher.get_nav(isin)
         if nav_data and nav_data.get('price'):
             today = datetime.now().strftime('%Y-%m-%d')
-            
-            # Evita duplicati
-            if not history or history[-1]['date'] != today:
-                history.append({
-                    'date': today,
-                    'price': nav_data['price']
-                })
-                
-                # Mantieni solo ultimi 100 giorni
-                history = history[-100:]
-                
-                # Salva
-                with open(history_file, 'w') as f:
-                    json.dump(history, f)
-        
-        # Converti in Serie
-        if history:
-            df = pd.DataFrame(history)
-            return pd.Series(df['price'].values, index=pd.to_datetime(df['date']))
-        else:
-            return pd.Series(dtype=float)
+            source = nav_data.get('source', 'FT Markets')
+
+            # Salva nel database PostgreSQL
+            self.db.save_price(isin, today, nav_data['price'], source)
+
+        # Recupera storico dal database (ultimi 100 giorni)
+        prices = self.db.get_price_series(isin, days=100)
+
+        if not prices.empty:
+            return prices
+
+        # Fallback: prova file JSON locale (per retrocompatibilità)
+        history_file = self.history_path / f"{isin}.json"
+        if history_file.exists():
+            try:
+                with open(history_file, 'r') as f:
+                    history = json.load(f)
+                if history:
+                    df = pd.DataFrame(history)
+                    return pd.Series(df['price'].values, index=pd.to_datetime(df['date']))
+            except Exception:
+                pass
+
+        return pd.Series(dtype=float)
     
     def analyze_fund(self, row: pd.Series) -> dict:
         """
