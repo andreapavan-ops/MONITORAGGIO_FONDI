@@ -167,42 +167,79 @@ class FundMonitor:
     def update_excel(self, results: list):
         """
         Aggiorna il file Excel con i risultati dell'analisi
-        
+        Include aggiornamento automatico del livello
+
         Args:
             results: Lista di risultati analisi
         """
         try:
             wb = load_workbook(self.excel_path)
             ws = wb['Fondi']
-            
+
+            # Mappa colonne Excel:
+            # A(1)=Livello, B(2)=ISIN, C(3)=Nome, D(4)=Casa, E(5)=Categoria,
+            # F(6)=Valuta, G(7)=Prezzo, H(8)=MM20, I(9)=RSI, J(10)=Segnale, K(11)=Ultima Modifica
+            COL_LIVELLO = 1
+            COL_ISIN = 2
+            COL_PREZZO = 7
+            COL_MM = 8
+            COL_RSI = 9
+            COL_SEGNALE = 10
+            COL_ULTIMA_MODIFICA = 11
+
             # Mappa ISIN -> riga
             isin_to_row = {}
             for row in range(2, ws.max_row + 1):
-                isin = ws.cell(row=row, column=2).value
+                isin = ws.cell(row=row, column=COL_ISIN).value
                 if isin:
                     isin_to_row[isin] = row
-            
+
+            level_changes = []
+
             # Aggiorna dati
             for result in results:
                 isin = result['isin']
                 analysis = result['analysis']
-                
+
                 if isin in isin_to_row:
                     row = isin_to_row[isin]
-                    
+
+                    # Livello (colonna A) - AGGIORNAMENTO AUTOMATICO
+                    current_level = result['livello']
+                    suggested_level = analysis.get('suggested_level', current_level)
+                    level_reason = analysis.get('level_reason', '')
+
+                    if suggested_level != current_level:
+                        ws.cell(row=row, column=COL_LIVELLO, value=suggested_level)
+                        level_changes.append({
+                            'nome': result['nome'],
+                            'isin': isin,
+                            'from': current_level,
+                            'to': suggested_level,
+                            'reason': level_reason
+                        })
+                        # Colora cella livello in base al cambio
+                        level_cell = ws.cell(row=row, column=COL_LIVELLO)
+                        if suggested_level < current_level:  # Upgrade (es. 3→2 o 2→1)
+                            level_cell.fill = PatternFill("solid", fgColor="00B050")
+                            level_cell.font = Font(bold=True, color="FFFFFF")
+                        else:  # Downgrade (es. 1→2 o 2→3)
+                            level_cell.fill = PatternFill("solid", fgColor="FF6600")
+                            level_cell.font = Font(bold=True, color="FFFFFF")
+
                     # Prezzo (colonna G)
-                    ws.cell(row=row, column=7, value=analysis.get('current_price'))
-                    
-                    # MM15 (colonna H)
-                    ws.cell(row=row, column=8, value=analysis.get('ma'))
-                    
+                    ws.cell(row=row, column=COL_PREZZO, value=analysis.get('current_price'))
+
+                    # MM20 (colonna H)
+                    ws.cell(row=row, column=COL_MM, value=analysis.get('ma'))
+
                     # RSI (colonna I)
-                    ws.cell(row=row, column=9, value=analysis.get('rsi'))
-                    
+                    ws.cell(row=row, column=COL_RSI, value=analysis.get('rsi'))
+
                     # Segnale (colonna J)
                     signal = analysis.get('final_signal', 'HOLD')
-                    signal_cell = ws.cell(row=row, column=10, value=signal)
-                    
+                    signal_cell = ws.cell(row=row, column=COL_SEGNALE, value=signal)
+
                     # Colora cella segnale
                     if signal == 'BUY':
                         signal_cell.fill = PatternFill("solid", fgColor="00B050")
@@ -213,15 +250,26 @@ class FundMonitor:
                     else:
                         signal_cell.fill = PatternFill("solid", fgColor="FFC000")
                         signal_cell.font = Font(bold=True)
-                    
+
                     # Ultima Modifica (colonna K)
-                    ws.cell(row=row, column=11, value=datetime.now().strftime('%Y-%m-%d %H:%M'))
-            
+                    ws.cell(row=row, column=COL_ULTIMA_MODIFICA, value=datetime.now().strftime('%Y-%m-%d %H:%M'))
+
             wb.save(self.excel_path)
             print(f"✅ File Excel aggiornato")
-            
+
+            # Log cambi di livello
+            if level_changes:
+                print(f"\n📊 CAMBI DI LIVELLO AUTOMATICI:")
+                for change in level_changes:
+                    arrow = "⬆️" if change['to'] < change['from'] else "⬇️"
+                    print(f"  {arrow} {change['nome'][:40]}: L{change['from']} → L{change['to']}")
+                    print(f"     Motivo: {change['reason']}")
+
+            return level_changes
+
         except Exception as e:
             print(f"❌ Errore aggiornamento Excel: {e}")
+            return []
     
     def generate_dashboard_data(self, results: list) -> dict:
         """

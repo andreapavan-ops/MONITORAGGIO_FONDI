@@ -2,9 +2,11 @@
 technical_analysis.py - Modulo per analisi tecnica dei fondi
 =============================================================
 Calcola indicatori tecnici:
-- Media Mobile (MM15)
+- Media Mobile (MM20)
+- Pendenza Media Mobile (Slope)
 - RSI (Relative Strength Index)
-- Segnali di acquisto/vendita
+- Bande di Bollinger
+- Logica passaggio automatico livelli 3 → 2 → 1
 """
 
 import pandas as pd
@@ -15,37 +17,226 @@ from typing import Dict, List, Tuple, Optional
 
 class TechnicalAnalyzer:
     """Classe per calcolare indicatori tecnici sui fondi"""
-    
+
     def __init__(self, config: dict = None):
         """
         Inizializza l'analizzatore tecnico
-        
+
         Args:
             config: Dizionario di configurazione con:
-                - ma_period: Periodo media mobile (default: 15)
+                - ma_period: Periodo media mobile (default: 20)
                 - rsi_period: Periodo RSI (default: 14)
-                - rsi_oversold: Soglia ipervenduto (default: 30)
-                - rsi_overbought: Soglia ipercomprato (default: 70)
+                - bollinger_period: Periodo Bollinger (default: 20)
+                - bollinger_std: Deviazioni standard Bollinger (default: 2)
+                - days_above_ma: Giorni sopra MM per passaggio L3→L2 (default: 3)
+                - rsi_optimal_low: RSI minimo per L1 (default: 55)
+                - rsi_optimal_high: RSI massimo per L1 (default: 65)
         """
         self.config = config or {}
-        self.ma_period = self.config.get('ma_period', 15)
+        self.ma_period = self.config.get('ma_period', 20)
         self.rsi_period = self.config.get('rsi_period', 14)
         self.rsi_oversold = self.config.get('rsi_oversold', 30)
         self.rsi_overbought = self.config.get('rsi_overbought', 70)
+        self.bollinger_period = self.config.get('bollinger_period', 20)
+        self.bollinger_std = self.config.get('bollinger_std', 2)
+        self.days_above_ma = self.config.get('days_above_ma', 3)
+        self.rsi_optimal_low = self.config.get('rsi_optimal_low', 55)
+        self.rsi_optimal_high = self.config.get('rsi_optimal_high', 65)
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
         Calcola la Media Mobile Semplice (SMA)
-        
+
         Args:
             prices: Serie di prezzi
             period: Periodo della media (default: self.ma_period)
-        
+
         Returns:
             Serie con i valori della media mobile
         """
         period = period or self.ma_period
         return prices.rolling(window=period).mean()
+
+    def calculate_ma_slope(self, ma: pd.Series, days: int = 3) -> float:
+        """
+        Calcola la pendenza della Media Mobile
+
+        Args:
+            ma: Serie della media mobile
+            days: Numero di giorni per calcolare la pendenza
+
+        Returns:
+            Pendenza (positiva = trend rialzista, negativa = ribassista)
+        """
+        if len(ma) < days + 1:
+            return 0.0
+        recent_ma = ma.dropna().tail(days + 1)
+        if len(recent_ma) < 2:
+            return 0.0
+        # Pendenza = (MA oggi - MA N giorni fa) / MA N giorni fa * 100
+        slope = (recent_ma.iloc[-1] - recent_ma.iloc[0]) / recent_ma.iloc[0] * 100
+        return slope
+
+    def calculate_bollinger_bands(self, prices: pd.Series, period: int = None,
+                                   std_dev: float = None) -> Dict[str, pd.Series]:
+        """
+        Calcola le Bande di Bollinger
+
+        Args:
+            prices: Serie di prezzi
+            period: Periodo per la media (default: self.bollinger_period)
+            std_dev: Numero di deviazioni standard (default: self.bollinger_std)
+
+        Returns:
+            Dizionario con 'middle' (SMA), 'upper', 'lower', 'width'
+        """
+        period = period or self.bollinger_period
+        std_dev = std_dev or self.bollinger_std
+
+        middle = prices.rolling(window=period).mean()
+        std = prices.rolling(window=period).std()
+
+        upper = middle + (std * std_dev)
+        lower = middle - (std * std_dev)
+        # Width = ampiezza delle bande (per rilevare squeeze/espansione)
+        width = (upper - lower) / middle * 100
+
+        return {
+            'middle': middle,
+            'upper': upper,
+            'lower': lower,
+            'width': width
+        }
+
+    def is_bollinger_expanding(self, bollinger: Dict[str, pd.Series], days: int = 3) -> bool:
+        """
+        Verifica se le Bande di Bollinger si stanno espandendo
+
+        Args:
+            bollinger: Dizionario con dati Bollinger
+            days: Giorni da confrontare
+
+        Returns:
+            True se le bande si stanno allargando
+        """
+        width = bollinger['width'].dropna()
+        if len(width) < days + 1:
+            return False
+        recent_width = width.tail(days + 1)
+        # Espansione = width attuale > width di N giorni fa
+        return recent_width.iloc[-1] > recent_width.iloc[0]
+
+    def count_days_above_ma(self, prices: pd.Series, ma: pd.Series, max_days: int = 10) -> int:
+        """
+        Conta i giorni consecutivi in cui il prezzo è sopra la MM
+
+        Args:
+            prices: Serie di prezzi
+            ma: Serie della media mobile
+            max_days: Massimo giorni da controllare
+
+        Returns:
+            Numero di giorni consecutivi sopra la MM
+        """
+        if len(prices) < 2 or len(ma) < 2:
+            return 0
+
+        count = 0
+        for i in range(1, min(max_days + 1, len(prices))):
+            idx = -i
+            if len(prices) >= abs(idx) and len(ma) >= abs(idx):
+                price = prices.iloc[idx]
+                ma_val = ma.iloc[idx]
+                if pd.notna(ma_val) and price > ma_val:
+                    count += 1
+                else:
+                    break
+            else:
+                break
+        return count
+
+    def suggest_level(self, prices: pd.Series, current_level: int = 3) -> Dict:
+        """
+        Suggerisce il livello appropriato per un fondo basandosi sugli indicatori
+
+        Logica:
+        - Livello 3: Prezzo sotto MM (monitoraggio passivo)
+        - Livello 2: Prezzo > MM per 3+ giorni consecutivi (segnale di forza)
+        - Livello 1: L2 + Slope MM positivo + RSI 55-65 + Bollinger in espansione
+
+        Args:
+            prices: Serie storica dei prezzi
+            current_level: Livello attuale del fondo
+
+        Returns:
+            Dizionario con livello suggerito e motivazione
+        """
+        if len(prices) < self.ma_period:
+            return {
+                'suggested_level': current_level,
+                'reason': 'Dati insufficienti per analisi',
+                'conditions': {}
+            }
+
+        # Calcola indicatori
+        ma = self.calculate_ma(prices)
+        ma_current = ma.iloc[-1]
+        current_price = prices.iloc[-1]
+
+        rsi = self.calculate_rsi(prices)
+        rsi_current = rsi.iloc[-1] if len(rsi) > 0 and pd.notna(rsi.iloc[-1]) else 50
+
+        ma_slope = self.calculate_ma_slope(ma)
+        days_above = self.count_days_above_ma(prices, ma)
+
+        bollinger = self.calculate_bollinger_bands(prices)
+        bb_expanding = self.is_bollinger_expanding(bollinger)
+
+        # Condizioni per ogni livello
+        price_above_ma = current_price > ma_current if pd.notna(ma_current) else False
+        price_above_ma_3days = days_above >= self.days_above_ma
+        slope_positive = ma_slope > 0
+        rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
+
+        conditions = {
+            'price_above_ma': price_above_ma,
+            'days_above_ma': days_above,
+            'price_above_ma_3days': price_above_ma_3days,
+            'ma_slope': round(ma_slope, 3),
+            'slope_positive': slope_positive,
+            'rsi': round(rsi_current, 1),
+            'rsi_optimal': rsi_optimal,
+            'bollinger_expanding': bb_expanding
+        }
+
+        # Determina livello suggerito
+        if not price_above_ma:
+            # Prezzo sotto MM → Livello 3
+            suggested = 3
+            reason = 'Prezzo sotto Media Mobile'
+        elif price_above_ma_3days and slope_positive and rsi_optimal and bb_expanding:
+            # Tutte le condizioni per L1
+            suggested = 1
+            reason = f'BUY ALERT: Prezzo>{self.days_above_ma}gg sopra MM, Slope positivo, RSI {rsi_current:.0f} (ottimale), Bollinger in espansione'
+        elif price_above_ma_3days:
+            # Solo condizione base per L2
+            suggested = 2
+            reason = f'Prezzo sopra MM da {days_above} giorni consecutivi'
+        elif price_above_ma:
+            # Prezzo sopra MM ma non ancora 3 giorni
+            suggested = 3
+            reason = f'Prezzo sopra MM da {days_above} giorni (servono {self.days_above_ma})'
+        else:
+            suggested = 3
+            reason = 'Monitoraggio passivo'
+
+        return {
+            'suggested_level': suggested,
+            'current_level': current_level,
+            'level_change': suggested != current_level,
+            'reason': reason,
+            'conditions': conditions
+        }
     
     def calculate_rsi(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -199,13 +390,13 @@ class TechnicalAnalyzer:
     def analyze_fund(self, prices: pd.Series, level: int = 3) -> Dict:
         """
         Esegue analisi tecnica completa su un fondo
-        
+
         Args:
             prices: Serie storica dei prezzi (più recente all'ultimo indice)
-            level: Livello del fondo (1, 2, 3) - determina profondità analisi
-        
+            level: Livello attuale del fondo (1, 2, 3)
+
         Returns:
-            Dizionario con tutti gli indicatori e segnali
+            Dizionario con tutti gli indicatori, segnali e livello suggerito
         """
         if len(prices) < self.ma_period:
             days_available = len(prices)
@@ -213,58 +404,80 @@ class TechnicalAnalyzer:
             return {
                 'current_price': prices.iloc[-1] if len(prices) > 0 else None,
                 'ma': None,
+                'ma_slope': None,
                 'rsi': None,
-                'macd': None,
+                'bollinger': None,
+                'days_above_ma': 0,
                 'final_signal': 'HOLD',
                 'signal_strength': 0,
+                'suggested_level': level,
+                'level_change': False,
+                'level_reason': f'Dati insufficienti: {days_available}/{days_needed} giorni',
                 'data_status': 'insufficient',
                 'error': f'Dati insufficienti: {days_available}/{days_needed} giorni. Attendere accumulo storico.'
             }
-        
+
         current_price = prices.iloc[-1]
-        
-        # Calcola indicatori base (tutti i livelli)
+
+        # Calcola indicatori
         ma = self.calculate_ma(prices)
         ma_current = ma.iloc[-1]
-        
+        ma_slope = self.calculate_ma_slope(ma)
+
         rsi = self.calculate_rsi(prices)
         rsi_current = rsi.iloc[-1]
-        
-        # Segnali base
+
+        bollinger = self.calculate_bollinger_bands(prices)
+        bb_width = bollinger['width'].iloc[-1] if pd.notna(bollinger['width'].iloc[-1]) else 0
+        bb_expanding = self.is_bollinger_expanding(bollinger)
+
+        days_above = self.count_days_above_ma(prices, ma)
+
+        # Segnali per compatibilità
         ma_signal = self.get_price_vs_ma_signal(current_price, ma_current)
         rsi_signal = self.get_rsi_signal(rsi_current)
-        
         signals = [ma_signal, rsi_signal]
-        
-        # Per livelli 1 e 2, aggiungi MACD
+
+        # MACD per livelli 1 e 2
         macd_data = None
         macd_signal = 'HOLD'
-        
+
         if level <= 2 and len(prices) >= 26:
             macd_data = self.calculate_macd(prices)
             macd_current = macd_data['macd'].iloc[-1]
             signal_current = macd_data['signal'].iloc[-1]
-            
+
             prev_macd = macd_data['macd'].iloc[-2] if len(macd_data['macd']) > 1 else None
             prev_signal = macd_data['signal'].iloc[-2] if len(macd_data['signal']) > 1 else None
-            
+
             macd_signal = self.get_macd_signal(macd_current, signal_current, prev_macd, prev_signal)
             signals.append(macd_signal)
-        
-        # Determina segnale combinato
-        min_agreement = 2 if level == 3 else 2
-        final_signal, strength = self.get_combined_signal(signals, min_agreement)
-        
+
+        # Segnale combinato
+        final_signal, strength = self.get_combined_signal(signals, min_agreement=2)
+
+        # Suggerimento livello automatico
+        level_suggestion = self.suggest_level(prices, current_level=level)
+
         # Calcola distanza dal max 52 settimane
         max_52w = prices.tail(252).max() if len(prices) >= 252 else prices.max()
         pct_from_high = (current_price - max_52w) / max_52w * 100
-        
+
         return {
             'current_price': round(current_price, 4),
-            'ma': round(ma_current, 4) if not np.isnan(ma_current) else None,
+            'ma': round(ma_current, 4) if pd.notna(ma_current) else None,
+            'ma_slope': round(ma_slope, 3),
             'ma_signal': ma_signal,
-            'rsi': round(rsi_current, 2) if not np.isnan(rsi_current) else None,
+            'rsi': round(rsi_current, 2) if pd.notna(rsi_current) else None,
             'rsi_signal': rsi_signal,
+            'bollinger': {
+                'upper': round(bollinger['upper'].iloc[-1], 4) if pd.notna(bollinger['upper'].iloc[-1]) else None,
+                'middle': round(bollinger['middle'].iloc[-1], 4) if pd.notna(bollinger['middle'].iloc[-1]) else None,
+                'lower': round(bollinger['lower'].iloc[-1], 4) if pd.notna(bollinger['lower'].iloc[-1]) else None,
+                'width': round(bb_width, 2),
+                'expanding': bb_expanding
+            },
+            'days_above_ma': days_above,
             'macd': {
                 'line': round(macd_data['macd'].iloc[-1], 4) if macd_data else None,
                 'signal': round(macd_data['signal'].iloc[-1], 4) if macd_data else None,
@@ -274,7 +487,12 @@ class TechnicalAnalyzer:
             'final_signal': final_signal,
             'signal_strength': strength,
             'total_signals': len(signals),
+            'suggested_level': level_suggestion['suggested_level'],
+            'level_change': level_suggestion['level_change'],
+            'level_reason': level_suggestion['reason'],
+            'level_conditions': level_suggestion['conditions'],
             'pct_from_high_52w': round(pct_from_high, 2),
+            'data_status': 'ok',
             'analysis_date': datetime.now().strftime('%Y-%m-%d %H:%M')
         }
     
