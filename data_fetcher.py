@@ -127,7 +127,9 @@ class FundDataFetcher:
     def get_historical_nav(self, isin: str, days: int = 30) -> pd.DataFrame:
         """
         Recupera storico NAV per calcolo indicatori tecnici
-        Returns: DataFrame con colonne ['date', 'nav']
+        Returns: DataFrame con colonne ['date', 'nav'] oppure DataFrame vuoto se non disponibile
+
+        NOTA: Usa solo dati reali, non genera dati simulati
         """
         # Prova prima con Yahoo Finance che ha dati storici
         try:
@@ -143,30 +145,9 @@ class FundDataFetcher:
         except:
             pass
 
-        # Fallback: genera serie storica basata sul NAV attuale
-        today = datetime.now()
-        dates = [(today - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
-
-        # Recupera NAV attuale
-        current = self.get_nav(isin)
-        if current and current.get('price'):
-            base_price = current['price']
-        else:
-            base_price = 100.0  # Placeholder
-
-        # Genera serie storica simulata (±1% variazione giornaliera)
-        import numpy as np
-        np.random.seed(hash(isin) % 2**32)
-        returns = np.random.normal(0, 0.01, days)
-        prices = [base_price]
-        for r in returns[:-1]:
-            prices.append(prices[-1] * (1 + r))
-        prices.reverse()
-
-        return pd.DataFrame({
-            'date': dates[::-1],
-            'nav': prices
-        })
+        # Nessun dato storico disponibile - ritorna DataFrame vuoto
+        # I dati verranno accumulati nel tempo dai file JSON locali
+        return pd.DataFrame(columns=['date', 'nav'])
 
 
 def test_fetcher():

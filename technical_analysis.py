@@ -208,14 +208,17 @@ class TechnicalAnalyzer:
             Dizionario con tutti gli indicatori e segnali
         """
         if len(prices) < self.ma_period:
+            days_available = len(prices)
+            days_needed = self.ma_period
             return {
                 'current_price': prices.iloc[-1] if len(prices) > 0 else None,
                 'ma': None,
                 'rsi': None,
                 'macd': None,
-                'signal': 'HOLD',
+                'final_signal': 'HOLD',
                 'signal_strength': 0,
-                'error': 'Dati insufficienti per analisi'
+                'data_status': 'insufficient',
+                'error': f'Dati insufficienti: {days_available}/{days_needed} giorni. Attendere accumulo storico.'
             }
         
         current_price = prices.iloc[-1]

@@ -142,13 +142,15 @@ class FundMonitor:
         
         print(f"  📊 Analisi {row['Nome Fondo'][:40]}...")
         
-        # Recupera storico
+        # Recupera storico dai file JSON locali (solo dati reali)
         prices = self.get_fund_history(isin)
-        
+
         if len(prices) < 5:
-            # Se poco storico, usa dati simulati per iniziare
+            # Storico insufficiente - prova Yahoo Finance come ultima risorsa
             df_hist = self.data_fetcher.get_historical_nav(isin, days=30)
-            prices = pd.Series(df_hist['nav'].values)
+            if not df_hist.empty:
+                prices = pd.Series(df_hist['nav'].values)
+            # Se ancora insufficiente, l'analisi restituirà "dati insufficienti"
         
         # Esegui analisi
         analysis = self.analyzer.analyze_fund(prices, level=level)
