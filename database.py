@@ -118,6 +118,7 @@ class PriceDatabase:
                         price DECIMAL(12, 4) NOT NULL,
                         source VARCHAR(50),
                         created_at TIMESTAMP DEFAULT NOW(),
+                        updated_at TIMESTAMP DEFAULT NOW(),
                         UNIQUE(isin, date)
                     )
                 """)
@@ -167,10 +168,10 @@ class PriceDatabase:
             with conn.cursor() as cur:
                 # UPSERT: inserisce o aggiorna se esiste già
                 cur.execute("""
-                    INSERT INTO price_history (isin, date, price, source)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO price_history (isin, date, price, source, updated_at)
+                    VALUES (%s, %s, %s, %s, NOW())
                     ON CONFLICT (isin, date)
-                    DO UPDATE SET price = EXCLUDED.price, source = EXCLUDED.source
+                    DO UPDATE SET price = EXCLUDED.price, source = EXCLUDED.source, updated_at = NOW()
                 """, (isin, date, price, source))
                 conn.commit()
                 print(f"  💾 Prezzo salvato in DB: {isin} = {price} ({date})")
@@ -249,7 +250,7 @@ class PriceDatabase:
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT isin, date, price, source, created_at
+                    SELECT isin, date, price, source, created_at, updated_at
                     FROM price_history
                     ORDER BY isin, date DESC
                 """)
