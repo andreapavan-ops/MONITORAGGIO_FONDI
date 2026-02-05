@@ -43,6 +43,9 @@ class PriceDatabase:
 
         print(f"🔗 DATABASE_URL configurato: {self.database_url[:30]}...")
 
+        # Inizializza la tabella se non esiste
+        self._init_table()
+
     @staticmethod
     def _detect_database_url() -> Optional[str]:
         """
@@ -78,9 +81,6 @@ class PriceDatabase:
         print("⚠️ Nessuna variabile database trovata (DATABASE_URL, DATABASE_PUBLIC_URL, PGHOST)")
         print("   Aggiungi almeno una di queste variabili al servizio web su Railway")
         return None
-
-        # Inizializza la tabella se non esiste
-        self._init_table()
 
     def _get_connection(self):
         """Ottiene una connessione al database"""
