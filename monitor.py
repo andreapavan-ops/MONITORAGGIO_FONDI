@@ -18,6 +18,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 import json
 import time
+from decimal import Decimal
 from pathlib import Path
 
 # Import moduli locali
@@ -328,9 +329,15 @@ class FundMonitor:
                 dashboard_data['categories'][category] = []
             dashboard_data['categories'][category].append(fund_data)
         
-        # Salva JSON per dashboard
+        # Salva JSON per dashboard (converte Decimal dal DB in float)
+        class DecimalEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, Decimal):
+                    return float(obj)
+                return super().default(obj)
+
         with open('data/dashboard_data.json', 'w') as f:
-            json.dump(dashboard_data, f, indent=2)
+            json.dump(dashboard_data, f, indent=2, cls=DecimalEncoder)
         
         return dashboard_data
     
