@@ -236,6 +236,34 @@ class PriceDatabase:
             return pd.Series(dtype=float)
         return pd.Series(df['price'].values, index=df['date'])
 
+    def get_yesterday_price(self, isin: str) -> Optional[float]:
+        """
+        Recupera il prezzo di ieri per un fondo
+
+        Args:
+            isin: Codice ISIN del fondo
+
+        Returns:
+            Prezzo di ieri o None se non disponibile
+        """
+        conn = self._get_connection()
+        if not conn:
+            return None
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT price FROM price_history
+                    WHERE isin = %s AND date = CURRENT_DATE - INTERVAL '1 day'
+                """, (isin,))
+                row = cur.fetchone()
+                return float(row[0]) if row else None
+        except Exception as e:
+            logging.error(f"Errore recupero prezzo ieri {isin}: {e}")
+            return None
+        finally:
+            conn.close()
+
     def get_all_prices(self) -> pd.DataFrame:
         """
         Recupera tutti i prezzi nel database (per debug/export)

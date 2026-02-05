@@ -310,13 +310,24 @@ class FundMonitor:
             else:
                 dashboard_data['summary']['hold_signals'] += 1
             
+            # Recupera prezzo di ieri dal database
+            price_today = r['analysis'].get('current_price')
+            price_yesterday = self.db.get_yesterday_price(r['isin'])
+
+            # Calcola variazione percentuale
+            change_pct = None
+            if price_today and price_yesterday:
+                change_pct = round(((price_today - price_yesterday) / price_yesterday) * 100, 2)
+
             # Dati per livello
             fund_data = {
                 'isin': r['isin'],
                 'nome': r['nome'],
                 'casa': r['casa'],
                 'categoria': category,
-                'price': r['analysis'].get('current_price'),
+                'price': price_today,
+                'price_yesterday': price_yesterday,
+                'change_pct': change_pct,
                 'ma': r['analysis'].get('ma'),
                 'rsi': r['analysis'].get('rsi'),
                 'signal': signal,
