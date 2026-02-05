@@ -121,13 +121,25 @@ class PriceDatabase:
                         UNIQUE(isin, date)
                     )
                 """)
+                # Aggiungi vincolo UNIQUE se mancante (tabella già esistente)
+                cur.execute("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM pg_constraint
+                            WHERE conname = 'price_history_isin_date_key'
+                        ) THEN
+                            ALTER TABLE price_history ADD CONSTRAINT price_history_isin_date_key UNIQUE (isin, date);
+                        END IF;
+                    END $$;
+                """)
                 # Crea indice per query veloci
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_price_history_isin_date
                     ON price_history(isin, date DESC)
                 """)
                 conn.commit()
-                print("✅ Tabella price_history pronta")
+                print("✅ Tabella price_history pronta (con vincolo UNIQUE)")
         except Exception as e:
             logging.error(f"Errore creazione tabella: {e}")
         finally:
