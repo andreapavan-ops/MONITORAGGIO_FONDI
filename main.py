@@ -40,6 +40,19 @@ def main():
     # Crea cartelle necessarie
     os.makedirs('data', exist_ok=True)
     os.makedirs('data/history', exist_ok=True)
+
+    # Crea file dati iniziale se non esiste (per evitare errore dashboard al primo avvio)
+    import json
+    if not os.path.exists('data/dashboard_data.json'):
+        initial_data = {
+            'last_update': datetime.now().isoformat(),
+            'summary': {'total_funds': 0, 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
+            'levels': {'1': [], '2': [], '3': []},
+            'categories': {}
+        }
+        with open('data/dashboard_data.json', 'w') as f:
+            json.dump(initial_data, f)
+        print("📄 File dashboard_data.json iniziale creato")
     
     # Avvia web server SUBITO (per superare l'healthcheck di Railway)
     port = int(os.environ.get('PORT', 5000))
