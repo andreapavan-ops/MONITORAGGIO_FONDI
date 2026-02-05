@@ -34,12 +34,15 @@ class PriceDatabase:
         self.connection = None
 
         if not POSTGRES_AVAILABLE:
-            logging.error("psycopg2 non disponibile")
+            print("❌ psycopg2 non disponibile - installa con: pip install psycopg2-binary")
             return
 
         if not self.database_url:
-            logging.warning("DATABASE_URL non configurato. Lo storico non verrà salvato.")
+            print("⚠️ DATABASE_URL non configurato. Lo storico non verrà salvato su PostgreSQL.")
+            print("   Imposta la variabile DATABASE_URL nelle variabili del servizio Railway.")
             return
+
+        print(f"🔗 DATABASE_URL configurato: {self.database_url[:30]}...")
 
         # Inizializza la tabella se non esiste
         self._init_table()
@@ -47,14 +50,22 @@ class PriceDatabase:
     def _get_connection(self):
         """Ottiene una connessione al database"""
         if not self.database_url or not POSTGRES_AVAILABLE:
+            if not self.database_url:
+                print("⚠️ DATABASE_URL non impostato, impossibile connettersi")
             return None
 
         try:
             conn = psycopg2.connect(self.database_url, sslmode='require')
             return conn
         except Exception as e:
-            logging.error(f"Errore connessione database: {e}")
-            return None
+            print(f"❌ Errore connessione database: {e}")
+            # Prova senza SSL (per database locali)
+            try:
+                conn = psycopg2.connect(self.database_url)
+                return conn
+            except Exception as e2:
+                print(f"❌ Errore connessione anche senza SSL: {e2}")
+                return None
 
     def _init_table(self):
         """Crea la tabella price_history se non esiste"""
@@ -102,6 +113,7 @@ class PriceDatabase:
         """
         conn = self._get_connection()
         if not conn:
+            print(f"⚠️ DB non disponibile - prezzo {isin} non salvato")
             return False
 
         try:
@@ -114,9 +126,10 @@ class PriceDatabase:
                     DO UPDATE SET price = EXCLUDED.price, source = EXCLUDED.source
                 """, (isin, date, price, source))
                 conn.commit()
+                print(f"  💾 Prezzo salvato in DB: {isin} = {price} ({date})")
                 return True
         except Exception as e:
-            logging.error(f"Errore salvataggio prezzo {isin}: {e}")
+            print(f"❌ Errore salvataggio prezzo {isin}: {e}")
             return False
         finally:
             conn.close()

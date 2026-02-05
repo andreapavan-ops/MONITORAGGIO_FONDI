@@ -27,8 +27,16 @@ def main():
     print(f"📅 Data: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"📧 Email alert: {os.environ.get('EMAIL_RECIPIENT')}")
     print(f"⏰ Orario monitoraggio: {os.environ.get('MONITOR_HOUR')}:{os.environ.get('MONITOR_MINUTE')}")
+
+    # Verifica DATABASE_URL
+    db_url = os.environ.get('DATABASE_URL')
+    if db_url:
+        print(f"🗄️ DATABASE_URL: configurato ({db_url[:30]}...)")
+    else:
+        print(f"⚠️ DATABASE_URL: NON CONFIGURATO - i prezzi non verranno salvati!")
+        print(f"   Vai su Railway → Servizio Web → Variables → aggiungi DATABASE_URL")
     print("="*60)
-    
+
     # Crea cartelle necessarie
     os.makedirs('data', exist_ok=True)
     os.makedirs('data/history', exist_ok=True)
