@@ -66,24 +66,39 @@ def get_funds():
 @app.route('/api/db-status')
 def db_status_endpoint():
     """Diagnostica connessione database PostgreSQL"""
+    raw_url = os.environ.get('DATABASE_URL', '')
+
+    # Mostra URL mascherato (senza password)
+    safe_url = 'NOT SET'
+    if raw_url:
+        import re
+        safe_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:***@', raw_url)
+
     result = {
-        'env_vars': {
-            'DATABASE_URL': bool(os.environ.get('DATABASE_URL')),
-            'DATABASE_PUBLIC_URL': bool(os.environ.get('DATABASE_PUBLIC_URL')),
-            'PGHOST': os.environ.get('PGHOST', 'NOT SET'),
-            'PGDATABASE': os.environ.get('PGDATABASE', 'NOT SET'),
-            'PGPORT': os.environ.get('PGPORT', 'NOT SET'),
-            'PGUSER': os.environ.get('PGUSER', 'NOT SET'),
-        },
+        'database_url_safe': safe_url,
+        'database_url_length': len(raw_url),
+        'database_url_starts_with': raw_url[:20] if raw_url else 'NOT SET',
         'db_url_resolved': bool(db.database_url),
         'timestamp': datetime.now().isoformat()
     }
 
-    # Test connessione
+    # Test connessione FRESCA (non usa cache)
     try:
-        stats = db.get_stats()
-        result['connection'] = 'OK'
-        result['stats'] = stats
+        import psycopg2
+        # Prova connessione diretta
+        try:
+            conn = psycopg2.connect(raw_url, sslmode='require', connect_timeout=5)
+            conn.close()
+            result['connection'] = 'OK (SSL)'
+        except Exception as ssl_err:
+            result['ssl_error'] = str(ssl_err)
+            try:
+                conn = psycopg2.connect(raw_url, connect_timeout=5)
+                conn.close()
+                result['connection'] = 'OK (no SSL)'
+            except Exception as no_ssl_err:
+                result['connection'] = 'ERRORE'
+                result['no_ssl_error'] = str(no_ssl_err)
     except Exception as e:
         result['connection'] = 'ERRORE'
         result['error'] = str(e)
