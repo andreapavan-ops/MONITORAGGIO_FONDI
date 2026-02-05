@@ -41,24 +41,33 @@ def main():
     os.makedirs('data', exist_ok=True)
     os.makedirs('data/history', exist_ok=True)
     
-    # Esegui monitoraggio iniziale se richiesto
-    if os.environ.get('RUN_ON_START', 'true').lower() == 'true':
-        print("\n▶ Esecuzione monitoraggio iniziale...")
-        try:
-            run_monitor()
-        except Exception as e:
-            print(f"⚠️ Errore monitoraggio iniziale: {e}")
-    
-    # Avvia scheduler in background
-    print("\n▶ Avvio scheduler...")
-    start_scheduler_thread()
-    
-    # Avvia web server
-    print("\n▶ Avvio web server...")
+    # Avvia web server SUBITO (per superare l'healthcheck di Railway)
     port = int(os.environ.get('PORT', 5000))
+    print(f"\n▶ Avvio web server sulla porta {port}...")
     print(f"🌐 Dashboard disponibile su http://localhost:{port}")
     print("="*60 + "\n")
-    
+
+    # Avvia monitoraggio iniziale e scheduler in background DOPO il server
+    def startup_background():
+        """Esegue monitoraggio iniziale e avvia scheduler in background"""
+        import time
+        time.sleep(5)  # Aspetta che Flask sia pronto
+
+        # Monitoraggio iniziale
+        if os.environ.get('RUN_ON_START', 'true').lower() == 'true':
+            print("\n▶ Esecuzione monitoraggio iniziale (background)...")
+            try:
+                run_monitor()
+            except Exception as e:
+                print(f"⚠️ Errore monitoraggio iniziale: {e}")
+
+        # Avvia scheduler
+        print("\n▶ Avvio scheduler...")
+        start_scheduler_thread()
+
+    bg_thread = threading.Thread(target=startup_background, daemon=True)
+    bg_thread.start()
+
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 
