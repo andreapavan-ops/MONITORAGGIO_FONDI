@@ -122,23 +122,23 @@ class AlertSystem:
                 <table style="width: 100%; border-collapse: collapse; background: white;">
                     <tr style="background: #00B050; color: white;">
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Prezzo Attuale</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>€{analysis['current_price']:.2f}</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>€{analysis.get('current_price', 0):.2f}</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;">Media Mobile 15gg</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">€{analysis['ma']:.2f if analysis['ma'] else 'N/A'}</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"€{:.2f}".format(analysis['ma']) if analysis.get('ma') else 'N/A'}</td>
                     </tr>
                     <tr style="background: #e8e8e8;">
                         <td style="padding: 10px; border: 1px solid #ddd;">RSI (14)</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{analysis['rsi']:.1f if analysis['rsi'] else 'N/A'}</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"{:.1f}".format(analysis['rsi']) if analysis.get('rsi') else 'N/A'}</td>
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;">Distanza da Max 52w</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{analysis['pct_from_high_52w']:.1f}%</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"{:.1f}%".format(analysis['pct_from_high_52w']) if analysis.get('pct_from_high_52w') else 'N/A'}</td>
                     </tr>
                     <tr style="background: #00B050; color: white;">
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Indicatori Concordi</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{analysis['signal_strength']}/{analysis['total_signals']}</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{analysis.get('signal_strength', 0)}/{analysis.get('total_signals', 0)}</strong></td>
                     </tr>
                 </table>
                 
@@ -196,23 +196,23 @@ class AlertSystem:
                 <table style="width: 100%; border-collapse: collapse; background: white;">
                     <tr style="background: #DC3545; color: white;">
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Prezzo Attuale</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>€{analysis['current_price']:.2f}</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>€{analysis.get('current_price', 0):.2f}</strong></td>
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;">Media Mobile 15gg</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">€{analysis['ma']:.2f if analysis['ma'] else 'N/A'}</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"€{:.2f}".format(analysis['ma']) if analysis.get('ma') else 'N/A'}</td>
                     </tr>
                     <tr style="background: #e8e8e8;">
                         <td style="padding: 10px; border: 1px solid #ddd;">RSI (14)</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{analysis['rsi']:.1f if analysis['rsi'] else 'N/A'}</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"{:.1f}".format(analysis['rsi']) if analysis.get('rsi') else 'N/A'}</td>
                     </tr>
                     <tr>
                         <td style="padding: 10px; border: 1px solid #ddd;">Distanza da Max 52w</td>
-                        <td style="padding: 10px; border: 1px solid #ddd;">{analysis['pct_from_high_52w']:.1f}%</td>
+                        <td style="padding: 10px; border: 1px solid #ddd;">{"{:.1f}%".format(analysis['pct_from_high_52w']) if analysis.get('pct_from_high_52w') else 'N/A'}</td>
                     </tr>
                     <tr style="background: #DC3545; color: white;">
                         <td style="padding: 10px; border: 1px solid #ddd;"><strong>Indicatori Concordi</strong></td>
-                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{analysis['signal_strength']}/{analysis['total_signals']}</strong></td>
+                        <td style="padding: 10px; border: 1px solid #ddd;"><strong>{analysis.get('signal_strength', 0)}/{analysis.get('total_signals', 0)}</strong></td>
                     </tr>
                 </table>
                 
@@ -259,9 +259,9 @@ class AlertSystem:
                     level_tables += f"""
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd;">{f['nome'][:35]}...</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">€{f['price']:.2f}</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{f['rsi']:.0f}</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; background: {signal_color}; color: white;">{f['signal']}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{"€{:.2f}".format(f['price']) if f.get('price') else '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{"{:.0f}".format(f['rsi']) if f.get('rsi') else '-'}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; background: {signal_color}; color: white;">{f.get('signal', 'HOLD')}</td>
                     </tr>
                     """
                 level_tables += "</table>"

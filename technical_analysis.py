@@ -509,16 +509,21 @@ class TechnicalAnalyzer:
         """Formatta un riassunto dell'analisi per display/email"""
         emoji = self.get_signal_emoji(analysis['final_signal'])
         
+        price = analysis.get('current_price')
+        ma = analysis.get('ma')
+        rsi = analysis.get('rsi')
+        pct = analysis.get('pct_from_high_52w')
+
         summary = f"""
 {emoji} {fund_name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Prezzo: €{analysis['current_price']:.2f}
-MM{self.ma_period}: €{analysis['ma']:.2f} ({analysis['ma_signal']})
-RSI: {analysis['rsi']:.1f} ({analysis['rsi_signal']})
-MACD: {analysis['macd_signal']}
+Prezzo: €{price:.2f if price else 'N/A'}
+MM{self.ma_period}: €{ma:.2f if ma else 'N/A'} ({analysis.get('ma_signal', 'N/A')})
+RSI: {rsi:.1f if rsi else 'N/A'} ({analysis.get('rsi_signal', 'N/A')})
+MACD: {analysis.get('macd_signal', 'N/A')}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SEGNALE: {analysis['final_signal']} ({analysis['signal_strength']}/{analysis['total_signals']} indicatori)
-Distanza da Max 52w: {analysis['pct_from_high_52w']:.1f}%
+SEGNALE: {analysis.get('final_signal', 'N/A')} ({analysis.get('signal_strength', 0)}/{analysis.get('total_signals', 0)} indicatori)
+Distanza da Max 52w: {pct:.1f if pct else 'N/A'}%
 """
         return summary
 
