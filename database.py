@@ -30,7 +30,7 @@ class PriceDatabase:
         Args:
             database_url: URL di connessione PostgreSQL (default: da variabile ambiente)
         """
-        self.database_url = database_url or os.environ.get('DATABASE_URL')
+        self.database_url = database_url or self._detect_database_url()
         self.connection = None
 
         if not POSTGRES_AVAILABLE:
@@ -38,11 +38,46 @@ class PriceDatabase:
             return
 
         if not self.database_url:
-            print("⚠️ DATABASE_URL non configurato. Lo storico non verrà salvato su PostgreSQL.")
-            print("   Imposta la variabile DATABASE_URL nelle variabili del servizio Railway.")
+            print("⚠️ DATABASE_URL non trovato. Lo storico non verrà salvato su PostgreSQL.")
             return
 
         print(f"🔗 DATABASE_URL configurato: {self.database_url[:30]}...")
+
+    @staticmethod
+    def _detect_database_url() -> Optional[str]:
+        """
+        Cerca l'URL del database in diversi modi:
+        1. DATABASE_URL (standard)
+        2. DATABASE_PUBLIC_URL (Railway public)
+        3. Costruisce da PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
+        """
+        # 1. DATABASE_URL diretto
+        url = os.environ.get('DATABASE_URL')
+        if url:
+            print("🔍 Trovato DATABASE_URL")
+            return url
+
+        # 2. DATABASE_PUBLIC_URL (Railway)
+        url = os.environ.get('DATABASE_PUBLIC_URL')
+        if url:
+            print("🔍 Trovato DATABASE_PUBLIC_URL")
+            return url
+
+        # 3. Costruisci da variabili PG* individuali (Railway le espone sul servizio Postgres)
+        pghost = os.environ.get('PGHOST')
+        pguser = os.environ.get('PGUSER', 'postgres')
+        pgpassword = os.environ.get('PGPASSWORD')
+        pgdatabase = os.environ.get('PGDATABASE', 'railway')
+        pgport = os.environ.get('PGPORT', '5432')
+
+        if pghost and pgpassword:
+            url = f"postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
+            print(f"🔍 DATABASE_URL costruito da variabili PG*: {pghost}:{pgport}")
+            return url
+
+        print("⚠️ Nessuna variabile database trovata (DATABASE_URL, DATABASE_PUBLIC_URL, PGHOST)")
+        print("   Aggiungi almeno una di queste variabili al servizio web su Railway")
+        return None
 
         # Inizializza la tabella se non esiste
         self._init_table()

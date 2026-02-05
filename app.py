@@ -64,11 +64,18 @@ def get_funds():
         return jsonify({'error': 'Data not available'}), 404
 
 @app.route('/api/db-status')
-def db_status():
+def db_status_endpoint():
     """Diagnostica connessione database PostgreSQL"""
     result = {
-        'database_url_set': bool(os.environ.get('DATABASE_URL')),
-        'database_url_prefix': os.environ.get('DATABASE_URL', 'NOT SET')[:30] + '...' if os.environ.get('DATABASE_URL') else 'NOT SET',
+        'env_vars': {
+            'DATABASE_URL': bool(os.environ.get('DATABASE_URL')),
+            'DATABASE_PUBLIC_URL': bool(os.environ.get('DATABASE_PUBLIC_URL')),
+            'PGHOST': os.environ.get('PGHOST', 'NOT SET'),
+            'PGDATABASE': os.environ.get('PGDATABASE', 'NOT SET'),
+            'PGPORT': os.environ.get('PGPORT', 'NOT SET'),
+            'PGUSER': os.environ.get('PGUSER', 'NOT SET'),
+        },
+        'db_url_resolved': bool(db.database_url),
         'timestamp': datetime.now().isoformat()
     }
 
