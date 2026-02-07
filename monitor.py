@@ -328,10 +328,10 @@ class FundMonitor:
             price_today = r['analysis'].get('current_price')
             price_yesterday = self.db.get_yesterday_price(r['isin'])
 
-            # Calcola variazione percentuale
+            # Calcola variazione percentuale (converti Decimal in float)
             change_pct = None
             if price_today and price_yesterday:
-                change_pct = round(((price_today - price_yesterday) / price_yesterday) * 100, 2)
+                change_pct = round(((float(price_today) - float(price_yesterday)) / float(price_yesterday)) * 100, 2)
 
             # Dati per livello
             fund_data = {
@@ -339,8 +339,8 @@ class FundMonitor:
                 'nome': r['nome'],
                 'casa': r['casa'],
                 'categoria': category,
-                'price': price_today,
-                'price_yesterday': price_yesterday,
+                'price': float(price_today) if price_today else None,
+                'price_yesterday': float(price_yesterday) if price_yesterday else None,
                 'change_pct': change_pct,
                 'ma': r['analysis'].get('ma'),
                 'rsi': r['analysis'].get('rsi'),
