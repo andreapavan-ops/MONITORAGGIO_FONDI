@@ -3,13 +3,14 @@ app.py - Web server per la dashboard
 =====================================
 Serve la dashboard HTML e i dati JSON.
 Legge dati direttamente da PostgreSQL (persistente).
+Include auto-recovery: se il monitoraggio non ha girato oggi, lo lancia automaticamente.
 """
 
 from flask import Flask, send_file, send_from_directory, jsonify, request
 import os
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, date
 
 from database import PriceDatabase
 
@@ -17,6 +18,10 @@ app = Flask(__name__)
 
 # Database instance globale
 db = PriceDatabase()
+
+# Flag per evitare monitoraggi multipli contemporanei
+_monitor_running = False
+_monitor_lock = threading.Lock()
 
 
 @app.route('/')
@@ -29,9 +34,71 @@ def serve_data(filename):
     """Serve i file dati JSON"""
     return send_from_directory('data', filename)
 
+def _get_last_update():
+    """Legge la data dell'ultimo aggiornamento dal file JSON"""
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        return data.get('last_update')
+    except:
+        return None
+
+
+def _should_run_today():
+    """Controlla se il monitoraggio deve girare oggi.
+    Ritorna True se:
+    - Non ha mai girato, oppure
+    - L'ultimo aggiornamento non e' di oggi E siamo dopo l'orario programmato
+    """
+    last_update = _get_last_update()
+    now = datetime.now()
+    monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
+
+    # Se non ha mai girato, deve girare
+    if not last_update:
+        return True
+
+    try:
+        last_dt = datetime.fromisoformat(last_update)
+        # Se l'ultimo aggiornamento non e' di oggi E siamo dopo l'ora programmata
+        if last_dt.date() < now.date() and now.hour >= monitor_hour:
+            return True
+    except:
+        return True
+
+    return False
+
+
+def _trigger_auto_monitor():
+    """Lancia il monitoraggio in background se non sta gia' girando"""
+    global _monitor_running
+    with _monitor_lock:
+        if _monitor_running:
+            return False
+        _monitor_running = True
+
+    def run():
+        global _monitor_running
+        try:
+            print(f"\n🔄 AUTO-RECOVERY: Monitoraggio automatico avviato - {datetime.now()}")
+            from monitor import FundMonitor
+            monitor = FundMonitor()
+            monitor.run(send_daily_report=True)
+            print(f"✅ AUTO-RECOVERY: Monitoraggio completato - {datetime.now()}")
+        except Exception as e:
+            print(f"❌ AUTO-RECOVERY: Errore monitoraggio: {e}")
+        finally:
+            with _monitor_lock:
+                _monitor_running = False
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    return True
+
+
 @app.route('/api/status')
 def status():
-    """Endpoint per verificare lo stato del sistema"""
+    """Endpoint per verificare lo stato del sistema (+ auto-recovery)"""
     # Prova prima il file JSON (generato dal monitor)
     json_status = None
     try:
@@ -47,11 +114,18 @@ def status():
     # Controlla anche lo stato del database
     db_stats = db.get_stats()
 
+    # AUTO-RECOVERY: se il monitoraggio non ha girato oggi, lancialo
+    auto_recovery_triggered = False
+    if _should_run_today() and not _monitor_running:
+        auto_recovery_triggered = _trigger_auto_monitor()
+
     return jsonify({
         'status': 'ok',
         'json_data': json_status,
         'database': db_stats,
-        'database_url_set': bool(os.environ.get('DATABASE_URL'))
+        'database_url_set': bool(os.environ.get('DATABASE_URL')),
+        'monitor_running': _monitor_running,
+        'auto_recovery_triggered': auto_recovery_triggered
     })
 
 @app.route('/api/funds')
@@ -128,25 +202,23 @@ def get_prices():
         stats = db.get_stats()
         return jsonify(stats)
 
-@app.route('/api/trigger-update', methods=['POST'])
+@app.route('/api/trigger-update', methods=['GET', 'POST'])
 def trigger_update():
-    """Trigger manuale del monitoraggio"""
-    def run_monitor_async():
-        try:
-            from monitor import FundMonitor
-            monitor = FundMonitor()
-            monitor.run(send_daily_report=False)
-        except Exception as e:
-            print(f"Errore monitoraggio manuale: {e}")
+    """Trigger manuale del monitoraggio (GET o POST)"""
+    started = _trigger_auto_monitor()
 
-    thread = threading.Thread(target=run_monitor_async)
-    thread.start()
-
-    return jsonify({
-        'status': 'started',
-        'message': 'Monitoraggio avviato in background',
-        'timestamp': datetime.now().isoformat()
-    })
+    if started:
+        return jsonify({
+            'status': 'started',
+            'message': 'Monitoraggio avviato in background',
+            'timestamp': datetime.now().isoformat()
+        })
+    else:
+        return jsonify({
+            'status': 'already_running',
+            'message': 'Monitoraggio gia\' in esecuzione, attendere il completamento',
+            'timestamp': datetime.now().isoformat()
+        })
 
 
 if __name__ == '__main__':
