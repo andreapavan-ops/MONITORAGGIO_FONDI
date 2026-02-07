@@ -13,15 +13,12 @@ import threading
 from datetime import datetime, date
 
 from database import PriceDatabase
+import monitor_lock
 
 app = Flask(__name__)
 
 # Database instance globale
 db = PriceDatabase()
-
-# Flag per evitare monitoraggi multipli contemporanei
-_monitor_running = False
-_monitor_lock = threading.Lock()
 
 
 @app.route('/')
@@ -71,14 +68,10 @@ def _should_run_today():
 
 def _trigger_auto_monitor():
     """Lancia il monitoraggio in background se non sta gia' girando"""
-    global _monitor_running
-    with _monitor_lock:
-        if _monitor_running:
-            return False
-        _monitor_running = True
+    if not monitor_lock.try_acquire():
+        return False
 
     def run():
-        global _monitor_running
         try:
             print(f"\n🔄 AUTO-RECOVERY: Monitoraggio automatico avviato - {datetime.now()}")
             from monitor import FundMonitor
@@ -88,8 +81,7 @@ def _trigger_auto_monitor():
         except Exception as e:
             print(f"❌ AUTO-RECOVERY: Errore monitoraggio: {e}")
         finally:
-            with _monitor_lock:
-                _monitor_running = False
+            monitor_lock.release()
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -116,7 +108,7 @@ def status():
 
     # AUTO-RECOVERY: se il monitoraggio non ha girato oggi, lancialo
     auto_recovery_triggered = False
-    if _should_run_today() and not _monitor_running:
+    if _should_run_today() and not monitor_lock.is_running():
         auto_recovery_triggered = _trigger_auto_monitor()
 
     return jsonify({
@@ -124,7 +116,7 @@ def status():
         'json_data': json_status,
         'database': db_stats,
         'database_url_set': bool(os.environ.get('DATABASE_URL')),
-        'monitor_running': _monitor_running,
+        'monitor_running': monitor_lock.is_running(),
         'auto_recovery_triggered': auto_recovery_triggered
     })
 

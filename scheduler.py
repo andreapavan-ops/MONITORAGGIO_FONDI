@@ -14,10 +14,7 @@ from datetime import datetime
 import threading
 
 from monitor import FundMonitor
-
-# Flag per evitare esecuzioni parallele
-_scheduler_monitor_running = False
-_scheduler_lock = threading.Lock()
+import monitor_lock
 
 
 def _has_run_today():
@@ -35,13 +32,10 @@ def _has_run_today():
 
 
 def run_monitor():
-    """Esegue il monitoraggio (con protezione contro esecuzioni parallele)"""
-    global _scheduler_monitor_running
-    with _scheduler_lock:
-        if _scheduler_monitor_running:
-            print(f"⚠️ Scheduler: monitoraggio gia' in esecuzione, skip")
-            return
-        _scheduler_monitor_running = True
+    """Esegue il monitoraggio (con lock condiviso per evitare esecuzioni parallele)"""
+    if not monitor_lock.try_acquire():
+        print(f"⚠️ Scheduler: monitoraggio gia' in esecuzione, skip")
+        return
 
     try:
         print(f"\n⏰ Scheduler: avvio monitoraggio programmato - {datetime.now()}")
@@ -50,8 +44,7 @@ def run_monitor():
     except Exception as e:
         print(f"❌ Errore durante monitoraggio: {e}")
     finally:
-        with _scheduler_lock:
-            _scheduler_monitor_running = False
+        monitor_lock.release()
 
 
 def fallback_check():
@@ -59,7 +52,7 @@ def fallback_check():
     hour = int(os.environ.get('MONITOR_HOUR', 18))
     now = datetime.now()
 
-    if now.hour >= hour and not _has_run_today() and not _scheduler_monitor_running:
+    if now.hour >= hour and not _has_run_today() and not monitor_lock.is_running():
         print(f"\n🔄 Scheduler FALLBACK: monitoraggio non eseguito oggi, lancio ora...")
         run_monitor()
     else:
