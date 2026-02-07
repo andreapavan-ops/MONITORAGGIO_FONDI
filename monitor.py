@@ -448,36 +448,77 @@ class FundMonitor:
                 add_log(f"  TRACEBACK: {error_detail}")
 
         add_log(f"Analisi completata: {len(results)} OK, {len(errors)} errori")
-        
+
         # 3. Aggiorna Excel
-        print("\n📝 Aggiornamento file Excel...")
-        self.update_excel(results)
-        
+        try:
+            add_log("Step 3: Aggiornamento file Excel...")
+            self.update_excel(results)
+            add_log("Step 3: Excel aggiornato OK")
+        except Exception as e:
+            add_log(f"Step 3 ERRORE Excel: {e}")
+            add_log(traceback.format_exc())
+
         # 4. Genera dati dashboard
-        print("\n📈 Generazione dati dashboard...")
-        os.makedirs('data', exist_ok=True)
-        dashboard_data = self.generate_dashboard_data(results)
-        
+        try:
+            add_log(f"Step 4: Generazione dashboard con {len(results)} risultati...")
+            os.makedirs('data', exist_ok=True)
+            dashboard_data = self.generate_dashboard_data(results)
+            total = dashboard_data.get('summary', {}).get('total_funds', '?')
+            add_log(f"Step 4: Dashboard generata OK - {total} fondi")
+        except Exception as e:
+            add_log(f"Step 4 ERRORE Dashboard: {e}")
+            add_log(traceback.format_exc())
+            # Genera dashboard minima per non bloccare tutto
+            dashboard_data = {
+                'last_update': datetime.now().isoformat(),
+                'summary': {'total_funds': len(results), 'buy_signals': 0, 'sell_signals': 0, 'hold_signals': 0},
+                'levels': {1: [], 2: [], 3: []},
+                'categories': {}
+            }
+            # Popola con dati minimi
+            for r in results:
+                try:
+                    fund_data = {
+                        'isin': r['isin'], 'nome': r['nome'], 'casa': r['casa'],
+                        'categoria': r['categoria'], 'price': r['analysis'].get('current_price'),
+                        'price_yesterday': None, 'change_pct': None, 'ma': r['analysis'].get('ma'),
+                        'rsi': r['analysis'].get('rsi'), 'signal': r['analysis'].get('final_signal', 'HOLD'),
+                        'signal_strength': r['analysis'].get('signal_strength', 0)
+                    }
+                    dashboard_data['levels'][r['livello']].append(fund_data)
+                except:
+                    pass
+            with open('data/dashboard_data.json', 'w') as f:
+                json.dump(dashboard_data, f, indent=2)
+            add_log(f"Step 4: Dashboard fallback salvata con {len(results)} fondi")
+
         # 5. Invia alert
-        print("\n📧 Verifica e invio alert...")
-        self.send_alerts(results)
-        
+        try:
+            add_log("Step 5: Invio alert...")
+            self.send_alerts(results)
+            add_log("Step 5: Alert OK")
+        except Exception as e:
+            add_log(f"Step 5 ERRORE Alert: {e}")
+
         # 6. Report giornaliero
         if send_daily_report:
-            print("\n📋 Invio report giornaliero...")
-            summary = {
-                'buy_signals': dashboard_data['summary']['buy_signals'],
-                'sell_signals': dashboard_data['summary']['sell_signals'],
-                'hold_signals': dashboard_data['summary']['hold_signals'],
-                'level_1': dashboard_data['levels'][1],
-                'level_2': dashboard_data['levels'][2],
-                'level_3': dashboard_data['levels'][3][:10]  # Solo primi 10 per L3
-            }
-            self.alert_system.send_daily_report(summary)
-        
-        print("\n" + "="*60)
-        print(f"✅ Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
-        print("="*60 + "\n")
+            try:
+                add_log("Step 6: Invio report giornaliero...")
+                summary = {
+                    'buy_signals': dashboard_data['summary']['buy_signals'],
+                    'sell_signals': dashboard_data['summary']['sell_signals'],
+                    'hold_signals': dashboard_data['summary']['hold_signals'],
+                    'level_1': dashboard_data['levels'].get(1, []),
+                    'level_2': dashboard_data['levels'].get(2, []),
+                    'level_3': dashboard_data['levels'].get(3, [])[:10]
+                }
+                self.alert_system.send_daily_report(summary)
+                add_log("Step 6: Report OK")
+            except Exception as e:
+                add_log(f"Step 6 ERRORE Report: {e}")
+
+        add_log(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
+        add_log("="*50)
 
 
 def main():
