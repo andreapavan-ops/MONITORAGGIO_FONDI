@@ -221,6 +221,18 @@ def trigger_update():
         })
 
 
+@app.route('/api/monitor-log')
+def get_monitor_log():
+    """Mostra il log del monitoraggio"""
+    from monitor import monitor_log
+    return jsonify({
+        'log': monitor_log,
+        'count': len(monitor_log),
+        'monitor_running': monitor_lock.is_running(),
+        'timestamp': datetime.now().isoformat()
+    })
+
+
 @app.route('/api/test-fund')
 def test_fund():
     """Test di debug: prova ad analizzare un singolo fondo"""

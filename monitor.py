@@ -28,9 +28,23 @@ from alerts import AlertSystem
 from database import PriceDatabase
 
 
+# Log globale degli errori consultabile via /api/monitor-log
+monitor_log = []
+
+
+def add_log(message: str):
+    """Aggiunge un messaggio al log globale"""
+    entry = f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
+    monitor_log.append(entry)
+    # Tieni solo gli ultimi 200 messaggi
+    if len(monitor_log) > 200:
+        monitor_log.pop(0)
+    print(entry)
+
+
 class FundMonitor:
     """Sistema principale di monitoraggio fondi"""
-    
+
     def __init__(self, excel_path: str = 'fondi_monitoraggio.xlsx'):
         """
         Inizializza il monitor
@@ -400,33 +414,40 @@ class FundMonitor:
     def run(self, send_daily_report: bool = True):
         """
         Esegue ciclo completo di monitoraggio
-        
+
         Args:
             send_daily_report: Se True, invia report giornaliero
         """
-        print("\n" + "="*60)
-        print(f"🚀 FUND MONITOR - Avvio monitoraggio {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        print("="*60)
-        
+        import traceback
+        add_log("="*50)
+        add_log(f"FUND MONITOR - Avvio monitoraggio {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
         # 1. Carica fondi
         df_funds = self.load_funds()
         if df_funds.empty:
-            print("❌ Nessun fondo da monitorare")
+            add_log("ERRORE: Nessun fondo da monitorare (DataFrame vuoto)")
             return
-        
+
+        add_log(f"Caricati {len(df_funds)} fondi dal file Excel")
+
         # 2. Analizza ogni fondo
-        print(f"\n📊 Analisi di {len(df_funds)} fondi...")
+        add_log(f"Inizio analisi di {len(df_funds)} fondi...")
         results = []
-        
+        errors = []
+
         for idx, row in df_funds.iterrows():
             try:
                 result = self.analyze_fund(row)
                 results.append(result)
+                add_log(f"  OK {row['ISIN']} - {row['Nome Fondo'][:30]}")
                 time.sleep(0.5)  # Rate limiting
             except Exception as e:
-                print(f"  ⚠️ Errore analisi {row['ISIN']}: {e}")
-        
-        print(f"\n✅ Analisi completata: {len(results)} fondi processati")
+                error_detail = traceback.format_exc()
+                errors.append({'isin': row['ISIN'], 'error': str(e), 'traceback': error_detail})
+                add_log(f"  ERRORE {row['ISIN']}: {e}")
+                add_log(f"  TRACEBACK: {error_detail}")
+
+        add_log(f"Analisi completata: {len(results)} OK, {len(errors)} errori")
         
         # 3. Aggiorna Excel
         print("\n📝 Aggiornamento file Excel...")
