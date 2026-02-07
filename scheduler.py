@@ -18,11 +18,17 @@ import monitor_lock
 
 
 def _has_run_today():
-    """Controlla se il monitoraggio ha gia' girato oggi"""
+    """Controlla se il monitoraggio ha gia' girato oggi con successo"""
     try:
         with open('data/dashboard_data.json', 'r') as f:
             data = json.load(f)
         last_update = data.get('last_update')
+        total_funds = data.get('summary', {}).get('total_funds', 0)
+
+        # Se ha 0 fondi, non consideriamo che abbia girato
+        if total_funds == 0:
+            return False
+
         if last_update:
             last_dt = datetime.fromisoformat(last_update)
             return last_dt.date() == datetime.now().date()

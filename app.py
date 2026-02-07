@@ -46,16 +46,24 @@ def _should_run_today():
     Ritorna True se:
     - Non ha mai girato, oppure
     - L'ultimo aggiornamento non e' di oggi E siamo dopo l'orario programmato
+    - Il file esiste ma ha 0 fondi (file iniziale vuoto creato al deploy)
     """
-    last_update = _get_last_update()
     now = datetime.now()
     monitor_hour = int(os.environ.get('MONITOR_HOUR', 18))
 
-    # Se non ha mai girato, deve girare
-    if not last_update:
-        return True
-
     try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        last_update = data.get('last_update')
+        total_funds = data.get('summary', {}).get('total_funds', 0)
+
+        # Se ha 0 fondi, il file e' vuoto (creato al deploy) → deve girare
+        if total_funds == 0:
+            return True
+
+        if not last_update:
+            return True
+
         last_dt = datetime.fromisoformat(last_update)
         # Se l'ultimo aggiornamento non e' di oggi E siamo dopo l'ora programmata
         if last_dt.date() < now.date() and now.hour >= monitor_hour:
@@ -211,6 +219,57 @@ def trigger_update():
             'message': 'Monitoraggio gia\' in esecuzione, attendere il completamento',
             'timestamp': datetime.now().isoformat()
         })
+
+
+@app.route('/api/test-fund')
+def test_fund():
+    """Test di debug: prova ad analizzare un singolo fondo"""
+    import traceback
+    result = {'steps': []}
+
+    try:
+        # Step 1: carica Excel
+        from monitor import FundMonitor
+        monitor = FundMonitor()
+        result['steps'].append('Excel FundMonitor creato OK')
+
+        df = monitor.load_funds()
+        result['steps'].append(f'Excel caricato: {len(df)} fondi')
+        result['columns'] = list(df.columns)
+
+        if df.empty:
+            result['error'] = 'DataFrame vuoto'
+            return jsonify(result)
+
+        # Step 2: prendi il primo fondo
+        row = df.iloc[0]
+        result['test_fund'] = {
+            'isin': str(row['ISIN']),
+            'nome': str(row['Nome Fondo']),
+            'livello': int(row['Livello'])
+        }
+        result['steps'].append(f"Fondo selezionato: {row['Nome Fondo']}")
+
+        # Step 3: fetch NAV
+        nav = monitor.data_fetcher.get_nav(row['ISIN'])
+        result['nav_result'] = nav
+        result['steps'].append(f"NAV: {nav}")
+
+        # Step 4: get history from DB
+        prices = monitor.db.get_price_series(row['ISIN'], days=100)
+        result['price_count'] = len(prices)
+        result['steps'].append(f"Storico DB: {len(prices)} prezzi")
+
+        # Step 5: analyze
+        analysis = monitor.analyze_fund(row)
+        result['analysis'] = str(analysis)
+        result['steps'].append('Analisi completata OK')
+
+    except Exception as e:
+        result['error'] = str(e)
+        result['traceback'] = traceback.format_exc()
+
+    return jsonify(result)
 
 
 if __name__ == '__main__':
