@@ -211,6 +211,7 @@ class PriceDatabase:
                 if rows:
                     df = pd.DataFrame(rows)
                     df['date'] = pd.to_datetime(df['date'])
+                    df['price'] = df['price'].astype(float)
                     df = df.sort_values('date').reset_index(drop=True)
                     return df
                 return pd.DataFrame(columns=['date', 'price'])
