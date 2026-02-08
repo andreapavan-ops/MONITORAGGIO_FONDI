@@ -264,6 +264,29 @@ class PriceDatabase:
         finally:
             conn.close()
 
+    def get_last_price_date(self, isin: str) -> Optional[str]:
+        """
+        Recupera la data dell'ultimo prezzo salvato per un dato ISIN
+
+        Returns: stringa 'YYYY-MM-DD' o None
+        """
+        conn = self._get_connection()
+        if not conn:
+            return None
+
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT MAX(date) as last_date FROM price_history WHERE isin = %s
+                """, (isin,))
+                row = cur.fetchone()
+                return str(row['last_date']) if row and row['last_date'] else None
+        except Exception as e:
+            logging.error(f"Errore recupero ultima data prezzo per {isin}: {e}")
+            return None
+        finally:
+            conn.close()
+
     def get_all_prices(self) -> pd.DataFrame:
         """
         Recupera tutti i prezzi nel database (per debug/export)

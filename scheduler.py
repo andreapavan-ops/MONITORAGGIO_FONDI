@@ -77,8 +77,44 @@ def run_scheduler():
     print(f"📅 Scheduler configurato per le {schedule_time} ogni giorno")
     print(f"   Prossima esecuzione: oggi alle {schedule_time}" if datetime.now().hour < hour else f"   Prossima esecuzione: domani alle {schedule_time}")
 
-    # Job principale: monitoraggio giornaliero
-    schedule.every().day.at(schedule_time).do(run_monitor)
+    # Job principale: monitoraggio configurabile per giorni della settimana
+    # MONITOR_DAYS può essere: '1-5' (lun-ven), '2-6' (mar-sab) o lista comma separata '1,2,3'
+    days_spec = os.environ.get('MONITOR_DAYS', '1-5')
+
+    def _schedule_day(num):
+        if num == 1:
+            schedule.every().monday.at(schedule_time).do(run_monitor)
+        elif num == 2:
+            schedule.every().tuesday.at(schedule_time).do(run_monitor)
+        elif num == 3:
+            schedule.every().wednesday.at(schedule_time).do(run_monitor)
+        elif num == 4:
+            schedule.every().thursday.at(schedule_time).do(run_monitor)
+        elif num == 5:
+            schedule.every().friday.at(schedule_time).do(run_monitor)
+        elif num == 6:
+            schedule.every().saturday.at(schedule_time).do(run_monitor)
+        elif num == 7:
+            schedule.every().sunday.at(schedule_time).do(run_monitor)
+
+    day_nums = []
+    try:
+        if ',' in days_spec:
+            parts = [p.strip() for p in days_spec.split(',')]
+            for p in parts:
+                day_nums.append(int(p))
+        elif '-' in days_spec:
+            a, b = days_spec.split('-')
+            a, b = int(a.strip()), int(b.strip())
+            day_nums = list(range(a, b + 1))
+        else:
+            day_nums = [int(days_spec.strip())]
+    except Exception:
+        # Default lun-ven
+        day_nums = [1, 2, 3, 4, 5]
+
+    for d in sorted(set(day_nums)):
+        _schedule_day(d)
 
     # Job fallback: ogni 30 minuti controlla se ha girato oggi
     schedule.every(30).minutes.do(fallback_check)

@@ -112,14 +112,62 @@ class FundMonitor:
         Returns:
             Serie pandas con prezzi storici
         """
-        # Recupera prezzo odierno e salvalo nel database
+        # Recupera prezzo odierno (o la data fornita dalla fonte) e salvalo solo se è più recente
         nav_data = self.data_fetcher.get_nav(isin)
-        if nav_data and nav_data.get('price'):
-            today = datetime.now().strftime('%Y-%m-%d')
+        if nav_data and nav_data.get('price') is not None:
+            # Fonte può riportare la data del prezzo; altrimenti consideriamo oggi
+            fetched_date_str = nav_data.get('date')
+            try:
+                fetched_date = datetime.fromisoformat(fetched_date_str).date() if fetched_date_str else datetime.now().date()
+            except Exception:
+                fetched_date = datetime.now().date()
+
             source = nav_data.get('source', 'FT Markets')
 
-            # Salva nel database PostgreSQL
-            self.db.save_price(isin, today, nav_data['price'], source)
+            # Controlla ultima data salvata nel DB (se disponibile)
+            try:
+                last_date_str = self.db.get_last_price_date(isin)
+            except Exception:
+                last_date_str = None
+
+            last_date = None
+            if last_date_str:
+                try:
+                    last_date = datetime.fromisoformat(last_date_str).date()
+                except Exception:
+                    last_date = None
+
+            # Se la data recuperata non è più recente, saltiamo il salvataggio
+            if last_date and fetched_date <= last_date:
+                print(f"  ℹ️ Dato {fetched_date} non più recente di ultimo salvataggio {last_date}, skip save")
+            else:
+                # Salva nel database PostgreSQL; se fallisce, salva localmente in data/history
+                try:
+                    saved = self.db.save_price(isin, fetched_date.strftime('%Y-%m-%d'), nav_data['price'], source)
+                except Exception:
+                    saved = False
+
+                if not saved:
+                    # Fallback: append al file JSON locale per preservare lo storico
+                    try:
+                        history_file = self.history_path / f"{isin}.json"
+                        history = []
+                        if history_file.exists():
+                            with open(history_file, 'r') as fh:
+                                try:
+                                    history = json.load(fh)
+                                except Exception:
+                                    history = []
+
+                        history.append({'date': fetched_date.strftime('%Y-%m-%d'), 'price': nav_data['price'], 'source': source})
+                        # Mantieni ultimi 365 giorni
+                        if len(history) > 365:
+                            history = history[-365:]
+                        with open(history_file, 'w') as fh:
+                            json.dump(history, fh)
+                        print(f"  💾 Prezzo salvato in file locale: {isin} = {nav_data['price']} ({fetched_date.strftime('%Y-%m-%d')})")
+                    except Exception as e:
+                        print(f"❌ Errore salvataggio locale prezzo {isin}: {e}")
 
         # Recupera storico dal database (ultimi 100 giorni)
         prices = self.db.get_price_series(isin, days=100)
