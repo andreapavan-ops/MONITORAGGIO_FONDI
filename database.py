@@ -1,10 +1,12 @@
 """
 database.py - Gestione database PostgreSQL per storico prezzi
 ==============================================================
-Salva e recupera lo storico dei prezzi dei fondi su PostgreSQL (Railway)
+Salva e recupera lo storico dei prezzi dei fondi su PostgreSQL (Railway).
+Include retry automatico, auto-detect URL interno e resilienza.
 """
 
 import os
+import time
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
@@ -20,92 +22,139 @@ except ImportError:
     logging.warning("psycopg2 non installato. Installa con: pip install psycopg2-binary")
 
 
+# Numero massimo di tentativi per connessione
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # secondi tra un tentativo e l'altro
+
+
 class PriceDatabase:
-    """Gestisce lo storico prezzi su PostgreSQL"""
+    """Gestisce lo storico prezzi su PostgreSQL con retry e resilienza"""
 
     def __init__(self, database_url: str = None):
-        """
-        Inizializza la connessione al database
-
-        Args:
-            database_url: URL di connessione PostgreSQL (default: da variabile ambiente)
-        """
         self.database_url = database_url or self._detect_database_url()
-        self.connection = None
+        self._db_available = False
 
         if not POSTGRES_AVAILABLE:
-            print("❌ psycopg2 non disponibile - installa con: pip install psycopg2-binary")
+            print("psycopg2 non disponibile - installa con: pip install psycopg2-binary")
             return
 
         if not self.database_url:
-            print("⚠️ DATABASE_URL non trovato. Lo storico non verrà salvato su PostgreSQL.")
+            print("DATABASE_URL non trovato. Lo storico non verra' salvato su PostgreSQL.")
             return
 
-        print(f"🔗 DATABASE_URL configurato: {self.database_url[:30]}...")
+        # Mostra URL mascherato
+        safe_url = self.database_url.split('@')[-1] if '@' in self.database_url else '***'
+        print(f"DATABASE_URL configurato: ...@{safe_url}")
 
-        # Inizializza la tabella se non esiste
+        # Inizializza la tabella (con retry)
         self._init_table()
 
     @staticmethod
     def _detect_database_url() -> Optional[str]:
         """
-        Cerca l'URL del database in diversi modi:
-        1. DATABASE_URL (standard)
-        2. DATABASE_PUBLIC_URL (Railway public)
-        3. Costruisce da PGHOST, PGUSER, PGPASSWORD, PGDATABASE, PGPORT
+        Cerca l'URL del database con priorita' all'URL interno Railway.
+        Ordine: URL interno costruito > DATABASE_URL > DATABASE_PUBLIC_URL > variabili PG*
         """
-        # 1. DATABASE_URL diretto
+        # 1. Costruisci URL interno Railway (piu' stabile e senza egress)
+        pgpassword = os.environ.get('PGPASSWORD')
+        pguser = os.environ.get('PGUSER', 'postgres')
+        pgdatabase = os.environ.get('PGDATABASE', 'railway')
+
+        if pgpassword:
+            # Prova prima il dominio interno Railway (sempre stabile)
+            internal_host = os.environ.get('PGHOST', '')
+            if '.railway.internal' in internal_host:
+                url = f"postgresql://{pguser}:{pgpassword}@{internal_host}:5432/{pgdatabase}"
+                print(f"Usando URL interno Railway: {internal_host}:5432")
+                return url
+
+            # Prova a costruire l'URL interno anche se PGHOST punta al proxy
+            # Su Railway il nome del servizio Postgres e' sempre raggiungibile via .railway.internal
+            internal_url = f"postgresql://{pguser}:{pgpassword}@postgres.railway.internal:5432/{pgdatabase}"
+            print(f"Tentativo URL interno Railway: postgres.railway.internal:5432")
+            # Testa se funziona
+            try:
+                import psycopg2 as pg2
+                conn = pg2.connect(internal_url, connect_timeout=5)
+                conn.close()
+                print("URL interno Railway funzionante!")
+                return internal_url
+            except Exception:
+                print("URL interno non raggiungibile, provo alternative...")
+
+        # 2. DATABASE_URL (potrebbe essere interno o esterno)
         url = os.environ.get('DATABASE_URL')
         if url:
-            print("🔍 Trovato DATABASE_URL")
+            print(f"Usando DATABASE_URL")
             return url
 
-        # 2. DATABASE_PUBLIC_URL (Railway)
+        # 3. DATABASE_PUBLIC_URL (Railway - proxy pubblico, meno stabile)
         url = os.environ.get('DATABASE_PUBLIC_URL')
         if url:
-            print("🔍 Trovato DATABASE_PUBLIC_URL")
+            print(f"Usando DATABASE_PUBLIC_URL (proxy pubblico)")
             return url
 
-        # 3. Costruisci da variabili PG* individuali (Railway le espone sul servizio Postgres)
+        # 4. Costruisci da variabili PG* (fallback)
         pghost = os.environ.get('PGHOST')
-        pguser = os.environ.get('PGUSER', 'postgres')
-        pgpassword = os.environ.get('PGPASSWORD')
-        pgdatabase = os.environ.get('PGDATABASE', 'railway')
         pgport = os.environ.get('PGPORT', '5432')
 
         if pghost and pgpassword:
             url = f"postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
-            print(f"🔍 DATABASE_URL costruito da variabili PG*: {pghost}:{pgport}")
+            print(f"DATABASE_URL costruito da variabili PG*: {pghost}:{pgport}")
             return url
 
-        print("⚠️ Nessuna variabile database trovata (DATABASE_URL, DATABASE_PUBLIC_URL, PGHOST)")
-        print("   Aggiungi almeno una di queste variabili al servizio web su Railway")
+        print("Nessuna variabile database trovata")
         return None
 
-    def _get_connection(self):
-        """Ottiene una connessione al database"""
+    def _get_connection(self, retries: int = MAX_RETRIES):
+        """Ottiene una connessione al database con retry automatico"""
         if not self.database_url or not POSTGRES_AVAILABLE:
-            if not self.database_url:
-                print("⚠️ DATABASE_URL non impostato, impossibile connettersi")
             return None
 
-        try:
-            conn = psycopg2.connect(self.database_url, sslmode='require')
-            return conn
-        except Exception as e:
-            print(f"❌ Errore connessione database: {e}")
-            # Prova senza SSL (per database locali)
+        last_error = None
+        for attempt in range(1, retries + 1):
+            # Prova con SSL (richiesto dai proxy pubblici Railway)
             try:
-                conn = psycopg2.connect(self.database_url)
+                conn = psycopg2.connect(self.database_url, sslmode='require', connect_timeout=10)
+                if attempt > 1:
+                    print(f"  Connessione riuscita al tentativo {attempt}")
+                self._db_available = True
                 return conn
-            except Exception as e2:
-                print(f"❌ Errore connessione anche senza SSL: {e2}")
-                return None
+            except Exception as e:
+                last_error = e
+
+            # Prova senza SSL (funziona con URL interni Railway)
+            try:
+                conn = psycopg2.connect(self.database_url, connect_timeout=10)
+                if attempt > 1:
+                    print(f"  Connessione (no-SSL) riuscita al tentativo {attempt}")
+                self._db_available = True
+                return conn
+            except Exception as e:
+                last_error = e
+
+            if attempt < retries:
+                wait = RETRY_DELAY * attempt
+                print(f"  Connessione fallita (tentativo {attempt}/{retries}), riprovo tra {wait}s...")
+                time.sleep(wait)
+
+        print(f"Connessione database fallita dopo {retries} tentativi: {last_error}")
+        self._db_available = False
+        return None
+
+    def is_available(self) -> bool:
+        """Controlla se il database e' raggiungibile"""
+        conn = self._get_connection(retries=1)
+        if conn:
+            conn.close()
+            return True
+        return False
 
     def _init_table(self):
         """Crea la tabella price_history se non esiste"""
         conn = self._get_connection()
         if not conn:
+            print("Impossibile inizializzare tabella - database non raggiungibile")
             return
 
         try:
@@ -122,7 +171,6 @@ class PriceDatabase:
                         UNIQUE(isin, date)
                     )
                 """)
-                # Aggiungi vincolo UNIQUE se mancante (tabella già esistente)
                 cur.execute("""
                     DO $$
                     BEGIN
@@ -134,39 +182,26 @@ class PriceDatabase:
                         END IF;
                     END $$;
                 """)
-                # Crea indice per query veloci
                 cur.execute("""
                     CREATE INDEX IF NOT EXISTS idx_price_history_isin_date
                     ON price_history(isin, date DESC)
                 """)
                 conn.commit()
-                print("✅ Tabella price_history pronta (con vincolo UNIQUE)")
+                print("Tabella price_history pronta")
         except Exception as e:
             logging.error(f"Errore creazione tabella: {e}")
         finally:
             conn.close()
 
     def save_price(self, isin: str, date: str, price: float, source: str = 'FT Markets') -> bool:
-        """
-        Salva un prezzo nel database
-
-        Args:
-            isin: Codice ISIN del fondo
-            date: Data nel formato YYYY-MM-DD
-            price: Prezzo/NAV
-            source: Fonte del dato
-
-        Returns:
-            True se salvato con successo
-        """
+        """Salva un prezzo nel database (con retry)"""
         conn = self._get_connection()
         if not conn:
-            print(f"⚠️ DB non disponibile - prezzo {isin} non salvato")
+            print(f"DB non disponibile - prezzo {isin} non salvato")
             return False
 
         try:
             with conn.cursor() as cur:
-                # UPSERT: inserisce o aggiorna se esiste già
                 cur.execute("""
                     INSERT INTO price_history (isin, date, price, source, updated_at)
                     VALUES (%s, %s, %s, %s, NOW())
@@ -174,25 +209,16 @@ class PriceDatabase:
                     DO UPDATE SET price = EXCLUDED.price, source = EXCLUDED.source, updated_at = NOW()
                 """, (isin, date, price, source))
                 conn.commit()
-                print(f"  💾 Prezzo salvato in DB: {isin} = {price} ({date})")
+                print(f"  Prezzo salvato in DB: {isin} = {price} ({date})")
                 return True
         except Exception as e:
-            print(f"❌ Errore salvataggio prezzo {isin}: {e}")
+            print(f"Errore salvataggio prezzo {isin}: {e}")
             return False
         finally:
             conn.close()
 
     def get_prices(self, isin: str, days: int = 30) -> pd.DataFrame:
-        """
-        Recupera lo storico prezzi per un fondo
-
-        Args:
-            isin: Codice ISIN del fondo
-            days: Numero di giorni da recuperare
-
-        Returns:
-            DataFrame con colonne ['date', 'price']
-        """
+        """Recupera lo storico prezzi per un fondo"""
         conn = self._get_connection()
         if not conn:
             return pd.DataFrame(columns=['date', 'price'])
@@ -222,31 +248,14 @@ class PriceDatabase:
             conn.close()
 
     def get_price_series(self, isin: str, days: int = 30) -> pd.Series:
-        """
-        Recupera lo storico prezzi come Serie pandas
-
-        Args:
-            isin: Codice ISIN del fondo
-            days: Numero di giorni
-
-        Returns:
-            Serie pandas con index=date e values=price
-        """
+        """Recupera lo storico prezzi come Serie pandas"""
         df = self.get_prices(isin, days)
         if df.empty:
             return pd.Series(dtype=float)
         return pd.Series(df['price'].values, index=df['date'])
 
     def get_yesterday_price(self, isin: str) -> Optional[float]:
-        """
-        Recupera il prezzo di ieri per un fondo
-
-        Args:
-            isin: Codice ISIN del fondo
-
-        Returns:
-            Prezzo di ieri o None se non disponibile
-        """
+        """Recupera il prezzo di ieri per un fondo"""
         conn = self._get_connection()
         if not conn:
             return None
@@ -266,11 +275,7 @@ class PriceDatabase:
             conn.close()
 
     def get_last_price_date(self, isin: str) -> Optional[str]:
-        """
-        Recupera la data dell'ultimo prezzo salvato per un dato ISIN
-
-        Returns: stringa 'YYYY-MM-DD' o None
-        """
+        """Recupera la data dell'ultimo prezzo salvato per un dato ISIN"""
         conn = self._get_connection()
         if not conn:
             return None
@@ -289,12 +294,7 @@ class PriceDatabase:
             conn.close()
 
     def get_all_prices(self) -> pd.DataFrame:
-        """
-        Recupera tutti i prezzi nel database (per debug/export)
-
-        Returns:
-            DataFrame con tutti i prezzi
-        """
+        """Recupera tutti i prezzi nel database"""
         conn = self._get_connection()
         if not conn:
             return pd.DataFrame()
@@ -315,15 +315,7 @@ class PriceDatabase:
             conn.close()
 
     def count_prices(self, isin: str = None) -> int:
-        """
-        Conta i prezzi salvati
-
-        Args:
-            isin: Se specificato, conta solo per questo ISIN
-
-        Returns:
-            Numero di record
-        """
+        """Conta i prezzi salvati"""
         conn = self._get_connection()
         if not conn:
             return 0
@@ -342,34 +334,25 @@ class PriceDatabase:
             conn.close()
 
     def get_stats(self) -> Dict:
-        """
-        Statistiche sul database
-
-        Returns:
-            Dizionario con statistiche
-        """
+        """Statistiche sul database"""
         conn = self._get_connection()
         if not conn:
             return {'error': 'Database non disponibile'}
 
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Conteggio totale
                 cur.execute("SELECT COUNT(*) as total FROM price_history")
                 total = cur.fetchone()['total']
 
-                # Fondi unici
                 cur.execute("SELECT COUNT(DISTINCT isin) as funds FROM price_history")
                 funds = cur.fetchone()['funds']
 
-                # Range date
                 cur.execute("""
                     SELECT MIN(date) as first_date, MAX(date) as last_date
                     FROM price_history
                 """)
                 dates = cur.fetchone()
 
-                # Prezzi per fondo
                 cur.execute("""
                     SELECT isin, COUNT(*) as count
                     FROM price_history
@@ -400,18 +383,15 @@ def test_database():
 
     db = PriceDatabase()
 
-    # Test salvataggio
     today = datetime.now().strftime('%Y-%m-%d')
     print(f"\nSalvataggio prezzo test...")
     success = db.save_price('TEST123', today, 100.50, 'Test')
-    print(f"  Risultato: {'✅ OK' if success else '❌ ERRORE'}")
+    print(f"  Risultato: {'OK' if success else 'ERRORE'}")
 
-    # Test recupero
     print(f"\nRecupero prezzi...")
     prices = db.get_prices('TEST123', 10)
     print(f"  Record trovati: {len(prices)}")
 
-    # Statistiche
     print(f"\nStatistiche database:")
     stats = db.get_stats()
     for k, v in stats.items():
