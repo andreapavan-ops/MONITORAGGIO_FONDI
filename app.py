@@ -233,6 +233,75 @@ def get_monitor_log():
     })
 
 
+@app.route('/api/backfill')
+def backfill():
+    """Backfill storico prezzi: recupera ultimi 50 giorni da Yahoo Finance e salva in DB"""
+    if not db.is_available():
+        return jsonify({'error': 'Database non disponibile'}), 503
+
+    days = int(request.args.get('days', 50))
+
+    def run_backfill():
+        import pandas as pd
+        from data_fetcher import FundDataFetcher
+
+        fetcher = FundDataFetcher()
+        stats = {'db_saved': 0, 'not_found': 0, 'errors': 0, 'funds_processed': 0}
+
+        try:
+            excel_df = pd.read_excel('fondi_monitoraggio.xlsx', sheet_name='Fondi')
+        except Exception as e:
+            print(f"Backfill: errore lettura Excel: {e}")
+            return
+
+        for _, row in excel_df.iterrows():
+            isin = str(row.get('ISIN', '')).strip()
+            nome = str(row.get('Nome Fondo', ''))[:40]
+            if not isin or isin.lower() in ['nan', 'none']:
+                continue
+
+            stats['funds_processed'] += 1
+            print(f"  Backfill {isin} - {nome}...")
+
+            try:
+                hist_df = fetcher.get_historical_nav(isin, days=days + 10)
+            except Exception:
+                hist_df = pd.DataFrame()
+
+            if hist_df is None or hist_df.empty:
+                stats['not_found'] += 1
+                continue
+
+            if 'date' not in hist_df.columns or 'nav' not in hist_df.columns:
+                stats['not_found'] += 1
+                continue
+
+            try:
+                hist_df['date'] = pd.to_datetime(hist_df['date']).dt.strftime('%Y-%m-%d')
+                hist_df = hist_df.sort_values('date')
+            except Exception:
+                pass
+
+            for _, r in hist_df.tail(days).iterrows():
+                try:
+                    ok = db.save_price(isin, str(r['date']), float(r['nav']), 'Yahoo/Backfill')
+                    if ok:
+                        stats['db_saved'] += 1
+                except Exception:
+                    stats['errors'] += 1
+
+        print(f"Backfill completato: {stats}")
+
+    thread = threading.Thread(target=run_backfill, daemon=True)
+    thread.start()
+
+    return jsonify({
+        'status': 'started',
+        'message': f'Backfill storico ultimi {days} giorni avviato in background',
+        'timestamp': datetime.now().isoformat()
+    })
+
+
 @app.route('/api/test-fund')
 def test_fund():
     """Test di debug: prova ad analizzare un singolo fondo"""
