@@ -31,6 +31,8 @@
         .fund-table th { background: rgba(0,0,0,0.3); padding: 10px 12px; text-align: left; }
         .fund-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .fund-table tr:hover { background: rgba(255,255,255,0.05); }
+        .fund-name { display: block; font-weight: 500; }
+        .fund-isin { display: block; font-size: 0.75em; color: #888; font-family: monospace; margin-top: 2px; }
         .signal { display: inline-block; padding: 4px 12px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
         .signal.buy { background: #00B050; }
         .signal.sell { background: #DC3545; }
@@ -144,7 +146,7 @@
                 const changeClass = f.change_pct > 0 ? 'up' : f.change_pct < 0 ? 'down' : 'flat';
                 const changeSign = f.change_pct > 0 ? '+' : '';
                 return `<tr>
-                    <td title="${f.isin}">${f.nome ? f.nome.substring(0,40) : '-'}...</td>
+                    <td><span class="fund-name">${f.nome || '-'}</span><span class="fund-isin">${f.isin || ''}</span></td>
                     <td>${level === 3 ? f.categoria : f.casa}</td>
                     <td class="price-yesterday">${f.price_yesterday ? '€' + f.price_yesterday.toFixed(2) : '-'}</td>
                     <td>€${f.price ? f.price.toFixed(2) : '-'}</td>
