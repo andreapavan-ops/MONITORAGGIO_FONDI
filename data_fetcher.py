@@ -124,14 +124,88 @@ class FundDataFetcher:
             'error': 'NAV non disponibile'
         }
 
+    def get_historical_nav_ft(self, isin: str, days: int = 30) -> pd.DataFrame:
+        """
+        Recupera storico NAV da FT Markets (funziona per tutti i fondi europei)
+        URL: https://markets.ft.com/data/funds/tearsheet/historical?s={ISIN}:EUR
+        """
+        try:
+            date_to = datetime.now()
+            date_from = date_to - timedelta(days=days + 5)
+
+            url = (
+                f"https://markets.ft.com/data/funds/tearsheet/historical"
+                f"?s={isin}:EUR"
+                f"&from={date_from.strftime('%Y/%m/%d')}"
+                f"&to={date_to.strftime('%Y/%m/%d')}"
+            )
+
+            response = self.session.get(url, timeout=20)
+            if response.status_code != 200:
+                return pd.DataFrame(columns=['date', 'nav'])
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Cerca la tabella storico prezzi
+            table = soup.find('table', class_='mod-ui-table')
+            if not table:
+                return pd.DataFrame(columns=['date', 'nav'])
+
+            rows = table.find_all('tr')
+            records = []
+
+            for row in rows[1:]:  # skip header
+                cells = row.find_all('td')
+                if len(cells) >= 2:
+                    try:
+                        date_text = cells[0].get_text(strip=True)
+                        price_text = cells[1].get_text(strip=True)
+
+                        # Parsa la data (formato: "Friday, February 07, 2026" o simili)
+                        date_clean = None
+                        for fmt in ['%A, %B %d, %Y', '%d/%m/%Y', '%Y-%m-%d', '%B %d, %Y']:
+                            try:
+                                date_clean = datetime.strptime(date_text, fmt).strftime('%Y-%m-%d')
+                                break
+                            except ValueError:
+                                continue
+
+                        if not date_clean:
+                            continue
+
+                        # Parsa il prezzo
+                        price_clean = re.sub(r'[^\d,\.]', '', price_text).replace(',', '.')
+                        if price_clean:
+                            price = float(price_clean)
+                            records.append({'date': date_clean, 'nav': price})
+                    except (ValueError, IndexError):
+                        continue
+
+            if records:
+                df = pd.DataFrame(records)
+                df = df.sort_values('date').drop_duplicates(subset='date')
+                return df
+
+        except Exception as e:
+            print(f"  Errore storico FT Markets per {isin}: {e}")
+
+        return pd.DataFrame(columns=['date', 'nav'])
+
     def get_historical_nav(self, isin: str, days: int = 30) -> pd.DataFrame:
         """
         Recupera storico NAV per calcolo indicatori tecnici
         Returns: DataFrame con colonne ['date', 'nav'] oppure DataFrame vuoto se non disponibile
-
-        NOTA: Usa solo dati reali, non genera dati simulati
+        Ordine: FT Markets (tutti i fondi EU) -> Yahoo Finance (backup)
         """
-        # Prova prima con Yahoo Finance che ha dati storici
+        # 1. FT Markets - funziona per tutti i fondi europei con ISIN
+        df = self.get_historical_nav_ft(isin, days)
+        if not df.empty and len(df) >= 5:
+            print(f"  Storico FT Markets: {len(df)} prezzi per {isin}")
+            return df
+
+        time.sleep(0.5)
+
+        # 2. Yahoo Finance (backup, copre pochi fondi EU)
         try:
             import yfinance as yf
             fund = yf.Ticker(isin)
@@ -145,8 +219,6 @@ class FundDataFetcher:
         except:
             pass
 
-        # Nessun dato storico disponibile - ritorna DataFrame vuoto
-        # I dati verranno accumulati nel tempo dai file JSON locali
         return pd.DataFrame(columns=['date', 'nav'])
 
 
