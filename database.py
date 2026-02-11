@@ -52,58 +52,36 @@ class PriceDatabase:
     @staticmethod
     def _detect_database_url() -> Optional[str]:
         """
-        Cerca l'URL del database con priorita' all'URL interno Railway.
-        Ordine: URL interno costruito > DATABASE_URL > DATABASE_PUBLIC_URL > variabili PG*
+        Cerca l'URL del database.
+        Ordine: DATABASE_URL > DATABASE_PUBLIC_URL > costruito da variabili PG*
         """
-        # 1. Costruisci URL interno Railway (piu' stabile e senza egress)
-        pgpassword = os.environ.get('PGPASSWORD')
-        pguser = os.environ.get('PGUSER', 'postgres')
-        pgdatabase = os.environ.get('PGDATABASE', 'railway')
-
-        if pgpassword:
-            # Prova prima il dominio interno Railway (sempre stabile)
-            internal_host = os.environ.get('PGHOST', '')
-            if '.railway.internal' in internal_host:
-                url = f"postgresql://{pguser}:{pgpassword}@{internal_host}:5432/{pgdatabase}"
-                print(f"Usando URL interno Railway: {internal_host}:5432")
-                return url
-
-            # Prova a costruire l'URL interno anche se PGHOST punta al proxy
-            # Su Railway il nome del servizio Postgres e' sempre raggiungibile via .railway.internal
-            internal_url = f"postgresql://{pguser}:{pgpassword}@postgres.railway.internal:5432/{pgdatabase}"
-            print(f"Tentativo URL interno Railway: postgres.railway.internal:5432")
-            # Testa se funziona
-            try:
-                import psycopg2 as pg2
-                conn = pg2.connect(internal_url, connect_timeout=5)
-                conn.close()
-                print("URL interno Railway funzionante!")
-                return internal_url
-            except Exception:
-                print("URL interno non raggiungibile, provo alternative...")
-
-        # 2. DATABASE_URL (potrebbe essere interno o esterno)
+        # 1. DATABASE_URL (impostato manualmente o da Railway)
         url = os.environ.get('DATABASE_URL')
         if url:
-            print(f"Usando DATABASE_URL")
+            safe = url.split('@')[-1] if '@' in url else '***'
+            print(f"Usando DATABASE_URL: ...@{safe}")
             return url
 
-        # 3. DATABASE_PUBLIC_URL (Railway - proxy pubblico, meno stabile)
+        # 2. DATABASE_PUBLIC_URL (Railway proxy pubblico)
         url = os.environ.get('DATABASE_PUBLIC_URL')
         if url:
-            print(f"Usando DATABASE_PUBLIC_URL (proxy pubblico)")
+            safe = url.split('@')[-1] if '@' in url else '***'
+            print(f"Usando DATABASE_PUBLIC_URL: ...@{safe}")
             return url
 
-        # 4. Costruisci da variabili PG* (fallback)
+        # 3. Costruisci da variabili PG*
         pghost = os.environ.get('PGHOST')
+        pguser = os.environ.get('PGUSER', 'postgres')
+        pgpassword = os.environ.get('PGPASSWORD')
+        pgdatabase = os.environ.get('PGDATABASE', 'railway')
         pgport = os.environ.get('PGPORT', '5432')
 
         if pghost and pgpassword:
             url = f"postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
-            print(f"DATABASE_URL costruito da variabili PG*: {pghost}:{pgport}")
+            print(f"DATABASE_URL costruito da PG*: {pghost}:{pgport}")
             return url
 
-        print("Nessuna variabile database trovata")
+        print("Nessuna variabile database trovata (DATABASE_URL, DATABASE_PUBLIC_URL, PGHOST)")
         return None
 
     def _get_connection(self, retries: int = MAX_RETRIES):
