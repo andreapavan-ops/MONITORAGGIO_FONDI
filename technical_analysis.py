@@ -450,8 +450,12 @@ class TechnicalAnalyzer:
         if len(prices) < self.ma_period:
             days_available = len(prices)
             days_needed = self.ma_period
+            # Calcola le percentuali possibili anche con dati insufficienti per MM
+            pct_1d = round(float((prices.iloc[-1] - prices.iloc[-2]) / prices.iloc[-2] * 100), 2) if len(prices) >= 2 else None
+            pct_1w = round(float((prices.iloc[-1] - prices.iloc[-6]) / prices.iloc[-6] * 100), 2) if len(prices) >= 6 else None
+            pct_1m = round(float((prices.iloc[-1] - prices.iloc[-22]) / prices.iloc[-22] * 100), 2) if len(prices) >= 22 else None
             return {
-                'current_price': prices.iloc[-1] if len(prices) > 0 else None,
+                'current_price': float(prices.iloc[-1]) if len(prices) > 0 else None,
                 'ma': None,
                 'ma_slope': None,
                 'rsi': None,
@@ -463,19 +467,19 @@ class TechnicalAnalyzer:
                 'level_change': False,
                 'level_reason': f'Dati insufficienti: {days_available}/{days_needed} giorni',
                 'buy_count': 0,
-                'pct_change_1d': None,
-                'pct_change_1w': None,
-                'pct_change_1m': None,
+                'pct_change_1d': pct_1d,
+                'pct_change_1w': pct_1w,
+                'pct_change_1m': pct_1m,
                 'data_status': 'insufficient',
                 'error': f'Dati insufficienti: {days_available}/{days_needed} giorni. Attendere accumulo storico.'
             }
 
         current_price = prices.iloc[-1]
 
-        # Variazioni percentuali
-        pct_1d = round((prices.iloc[-1] - prices.iloc[-2]) / prices.iloc[-2] * 100, 2) if len(prices) >= 2 else None
-        pct_1w = round((prices.iloc[-1] - prices.iloc[-6]) / prices.iloc[-6] * 100, 2) if len(prices) >= 6 else None
-        pct_1m = round((prices.iloc[-1] - prices.iloc[-22]) / prices.iloc[-22] * 100, 2) if len(prices) >= 22 else None
+        # Variazioni percentuali (float() per evitare numpy.float64)
+        pct_1d = round(float((prices.iloc[-1] - prices.iloc[-2]) / prices.iloc[-2] * 100), 2) if len(prices) >= 2 else None
+        pct_1w = round(float((prices.iloc[-1] - prices.iloc[-6]) / prices.iloc[-6] * 100), 2) if len(prices) >= 6 else None
+        pct_1m = round(float((prices.iloc[-1] - prices.iloc[-22]) / prices.iloc[-22] * 100), 2) if len(prices) >= 22 else None
 
         # Calcola indicatori
         ma = self.calculate_ma(prices)
