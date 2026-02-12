@@ -27,7 +27,10 @@
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
         /* Column widths shared between header and tables */
         .col-nome { width: 28%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
-        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-signal { width: 6%; }
+        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; }
+        .buy-count { font-weight: bold; font-size: 0.85em; }
+        .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
+        .legend strong { color: #fff; }
         .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
         .column-header table { width: 100%; max-width: 1360px; margin: 0 auto; border-collapse: collapse; table-layout: fixed; }
         .column-header th { padding: 8px 8px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; overflow: hidden; }
@@ -35,10 +38,6 @@
         .fund-table thead { display: none; }
         .fund-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; }
         .fund-table tr:hover { background: rgba(255,255,255,0.05); }
-        .signal { display: inline-block; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 0.75em; }
-        .signal.buy { background: #00B050; }
-        .signal.sell { background: #DC3545; }
-        .signal.hold { background: #FFC000; color: #333; }
         .rsi { font-weight: bold; }
         .rsi.low { color: #00B050; }
         .rsi.mid { color: #FFC000; }
@@ -72,20 +71,28 @@
 
     <div class="column-header">
         <table>
-            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
-            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr>
+            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
+            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr>
         </table>
     </div>
 
     <div class="container">
+
+        <div class="legend">
+            <strong>Condizioni BUY (4/4 richieste per L1):</strong>
+            1. Prezzo &gt; MM20 per 3+ gg |
+            2. Pendenza MM positiva |
+            3. RSI 55-65 |
+            4. Bollinger in espansione
+        </div>
 
         <div class="category-filters" id="categoryFilters"></div>
 
         <div class="level-section level-1">
             <div class="level-header"><span>LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level1Body"></tbody>
             </table>
         </div>
@@ -93,8 +100,8 @@
         <div class="level-section level-2">
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
@@ -102,8 +109,8 @@
         <div class="level-section level-3">
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
-                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
+                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
@@ -163,7 +170,6 @@
 
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const signalClass = f.signal ? f.signal.toLowerCase() : 'hold';
                 const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">-</td>';
@@ -181,7 +187,7 @@
                     ${fmtPct(f.pct_1m)}
                     <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td><span class="signal ${signalClass}">${f.signal || 'HOLD'}</span></td>
+                    <td class="buy-count">${f.buy_count || 0}/4</td>
                 </tr>`;
             }).join('');
         }

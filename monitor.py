@@ -395,8 +395,7 @@ class FundMonitor:
                 'pct_1d': r['analysis'].get('pct_change_1d'),
                 'pct_1w': r['analysis'].get('pct_change_1w'),
                 'pct_1m': r['analysis'].get('pct_change_1m'),
-                'signal': signal,
-                'signal_strength': r['analysis'].get('signal_strength', 0)
+                'buy_count': r['analysis'].get('buy_count', 0)
             }
             dashboard_data['levels'][level].append(fund_data)
             

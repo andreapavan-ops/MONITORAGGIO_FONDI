@@ -413,6 +413,7 @@ class TechnicalAnalyzer:
                 'suggested_level': level,
                 'level_change': False,
                 'level_reason': f'Dati insufficienti: {days_available}/{days_needed} giorni',
+                'buy_count': 0,
                 'pct_change_1d': None,
                 'pct_change_1w': None,
                 'pct_change_1m': None,
@@ -467,6 +468,15 @@ class TechnicalAnalyzer:
         # Suggerimento livello automatico
         level_suggestion = self.suggest_level(prices, current_level=level)
 
+        # Conteggio condizioni BUY (4 condizioni per L1)
+        lc = level_suggestion['conditions']
+        buy_count = sum([
+            lc.get('price_above_ma_3days', False),
+            lc.get('slope_positive', False),
+            lc.get('rsi_optimal', False),
+            lc.get('bollinger_expanding', False)
+        ])
+
         # Calcola distanza dal max 52 settimane
         max_52w = prices.tail(252).max() if len(prices) >= 252 else prices.max()
         pct_from_high = (current_price - max_52w) / max_52w * 100
@@ -499,6 +509,7 @@ class TechnicalAnalyzer:
             'level_change': level_suggestion['level_change'],
             'level_reason': level_suggestion['reason'],
             'level_conditions': level_suggestion['conditions'],
+            'buy_count': buy_count,
             'pct_change_1d': pct_1d,
             'pct_change_1w': pct_1w,
             'pct_change_1m': pct_1m,
