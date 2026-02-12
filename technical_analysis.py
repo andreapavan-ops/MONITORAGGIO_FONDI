@@ -41,7 +41,8 @@ class TechnicalAnalyzer:
         self.bollinger_std = self.config.get('bollinger_std', 2)
         self.days_above_ma = self.config.get('days_above_ma', 3)
         self.rsi_optimal_low = self.config.get('rsi_optimal_low', 55)
-        self.rsi_optimal_high = self.config.get('rsi_optimal_high', 65)
+        self.rsi_optimal_high = self.config.get('rsi_optimal_high', 68)
+        self.max_distance_from_ma = self.config.get('max_distance_from_ma', 6.0)  # Max 6% dal MM20
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -155,14 +156,41 @@ class TechnicalAnalyzer:
                 break
         return count
 
+    def count_consecutive_rising(self, prices: pd.Series, max_days: int = 5) -> int:
+        """
+        Conta i giorni consecutivi in cui il NAV è in salita
+
+        Args:
+            prices: Serie di prezzi
+            max_days: Massimo giorni da controllare
+
+        Returns:
+            Numero di giorni consecutivi in salita
+        """
+        if len(prices) < 2:
+            return 0
+        count = 0
+        for i in range(1, min(max_days + 1, len(prices))):
+            if prices.iloc[-i] > prices.iloc[-i - 1]:
+                count += 1
+            else:
+                break
+        return count
+
     def suggest_level(self, prices: pd.Series, current_level: int = 3) -> Dict:
         """
-        Suggerisce il livello appropriato per un fondo basandosi sugli indicatori
+        Suggerisce il livello appropriato per un fondo - Schema L1 Pro
 
-        Logica:
+        Logica L1 Pro (4 condizioni):
+        1. TREND: Prezzo > MM20 per 3+ gg, slope positivo, distanza < 6%
+        2. MOMENTUM: RSI 55-68
+        3. VOLATILITA: NAV sopra Banda Bollinger superiore
+        4. SETUP: NAV in salita per 2+ giorni consecutivi
+
+        Livelli:
         - Livello 3: Prezzo sotto MM (monitoraggio passivo)
-        - Livello 2: Prezzo > MM per 3+ giorni consecutivi (segnale di forza)
-        - Livello 1: L2 + Slope MM positivo + RSI 55-65 + Bollinger in espansione
+        - Livello 2: Prezzo > MM per 3+ giorni consecutivi
+        - Livello 1: Tutte e 4 le condizioni L1 Pro soddisfatte
 
         Args:
             prices: Serie storica dei prezzi
@@ -190,13 +218,31 @@ class TechnicalAnalyzer:
         days_above = self.count_days_above_ma(prices, ma)
 
         bollinger = self.calculate_bollinger_bands(prices)
-        bb_expanding = self.is_bollinger_expanding(bollinger)
+        bb_upper = bollinger['upper'].iloc[-1] if pd.notna(bollinger['upper'].iloc[-1]) else None
 
-        # Condizioni per ogni livello
+        # Distanza % dal MM20
+        distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
+
+        # Giorni consecutivi in salita
+        rising_days = self.count_consecutive_rising(prices)
+
+        # === CONDIZIONI L1 PRO ===
         price_above_ma = current_price > ma_current if pd.notna(ma_current) else False
         price_above_ma_3days = days_above >= self.days_above_ma
         slope_positive = ma_slope > 0
+        distance_ok = distance_from_ma < self.max_distance_from_ma  # < 6%
+
+        # Condizione 1: TREND (prezzo > MM20 3+gg, slope+, distanza < 6%)
+        trend_ok = price_above_ma_3days and slope_positive and distance_ok
+
+        # Condizione 2: MOMENTUM (RSI 55-68)
         rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
+
+        # Condizione 3: VOLATILITA (NAV sopra banda superiore Bollinger)
+        nav_above_upper_bb = (current_price > bb_upper) if bb_upper is not None else False
+
+        # Condizione 4: SETUP (NAV in salita per 2+ giorni)
+        nav_rising = rising_days >= 2
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -204,26 +250,29 @@ class TechnicalAnalyzer:
             'price_above_ma_3days': price_above_ma_3days,
             'ma_slope': round(ma_slope, 3),
             'slope_positive': slope_positive,
+            'distance_from_ma': round(distance_from_ma, 2),
+            'distance_ok': distance_ok,
             'rsi': round(rsi_current, 1),
             'rsi_optimal': rsi_optimal,
-            'bollinger_expanding': bb_expanding
+            'bb_upper': round(bb_upper, 4) if bb_upper else None,
+            'nav_above_upper_bb': nav_above_upper_bb,
+            'rising_days': rising_days,
+            'nav_rising': nav_rising,
+            # Le 4 condizioni aggregate per buy_count
+            'trend_ok': trend_ok,
         }
 
         # Determina livello suggerito
         if not price_above_ma:
-            # Prezzo sotto MM → Livello 3
             suggested = 3
             reason = 'Prezzo sotto Media Mobile'
-        elif price_above_ma_3days and slope_positive and rsi_optimal and bb_expanding:
-            # Tutte le condizioni per L1
+        elif trend_ok and rsi_optimal and nav_above_upper_bb and nav_rising:
             suggested = 1
-            reason = f'BUY ALERT: Prezzo>{self.days_above_ma}gg sopra MM, Slope positivo, RSI {rsi_current:.0f} (ottimale), Bollinger in espansione'
+            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, NAV>BB sup, {rising_days}gg salita'
         elif price_above_ma_3days:
-            # Solo condizione base per L2
             suggested = 2
             reason = f'Prezzo sopra MM da {days_above} giorni consecutivi'
         elif price_above_ma:
-            # Prezzo sopra MM ma non ancora 3 giorni
             suggested = 3
             reason = f'Prezzo sopra MM da {days_above} giorni (servono {self.days_above_ma})'
         else:
@@ -468,13 +517,13 @@ class TechnicalAnalyzer:
         # Suggerimento livello automatico
         level_suggestion = self.suggest_level(prices, current_level=level)
 
-        # Conteggio condizioni BUY (4 condizioni per L1)
+        # Conteggio condizioni BUY L1 Pro (4 condizioni)
         lc = level_suggestion['conditions']
         buy_count = sum([
-            lc.get('price_above_ma_3days', False),
-            lc.get('slope_positive', False),
-            lc.get('rsi_optimal', False),
-            lc.get('bollinger_expanding', False)
+            lc.get('trend_ok', False),           # 1. Trend: >MM20 3gg + slope+ + dist<6%
+            lc.get('rsi_optimal', False),         # 2. Momentum: RSI 55-68
+            lc.get('nav_above_upper_bb', False),  # 3. Volatilità: NAV > BB superiore
+            lc.get('nav_rising', False)           # 4. Setup: NAV in salita 2+gg
         ])
 
         # Calcola distanza dal max 52 settimane
