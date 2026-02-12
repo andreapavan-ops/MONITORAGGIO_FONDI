@@ -390,12 +390,12 @@ class FundMonitor:
                 'price': float(price_today) if price_today else None,
                 'price_yesterday': float(price_yesterday) if price_yesterday else None,
                 'change_pct': change_pct,
-                'ma': r['analysis'].get('ma'),
-                'rsi': r['analysis'].get('rsi'),
-                'pct_1d': r['analysis'].get('pct_change_1d'),
-                'pct_1w': r['analysis'].get('pct_change_1w'),
-                'pct_1m': r['analysis'].get('pct_change_1m'),
-                'buy_count': r['analysis'].get('buy_count', 0)
+                'ma': float(r['analysis'].get('ma')) if r['analysis'].get('ma') is not None else None,
+                'rsi': float(r['analysis'].get('rsi')) if r['analysis'].get('rsi') is not None else None,
+                'pct_1d': float(r['analysis'].get('pct_change_1d')) if r['analysis'].get('pct_change_1d') is not None else None,
+                'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
+                'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
+                'buy_count': int(r['analysis'].get('buy_count', 0))
             }
             dashboard_data['levels'][level].append(fund_data)
             
@@ -404,15 +404,25 @@ class FundMonitor:
                 dashboard_data['categories'][category] = []
             dashboard_data['categories'][category].append(fund_data)
         
-        # Salva JSON per dashboard (converte Decimal dal DB in float)
-        class DecimalEncoder(json.JSONEncoder):
+        # Salva JSON per dashboard (converte Decimal e numpy types)
+        class SafeEncoder(json.JSONEncoder):
             def default(self, obj):
                 if isinstance(obj, Decimal):
                     return float(obj)
+                # Gestione tipi numpy
+                import numpy as np
+                if isinstance(obj, (np.integer,)):
+                    return int(obj)
+                if isinstance(obj, (np.floating,)):
+                    return float(obj)
+                if isinstance(obj, (np.bool_,)):
+                    return bool(obj)
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
                 return super().default(obj)
 
         with open('data/dashboard_data.json', 'w') as f:
-            json.dump(dashboard_data, f, indent=2, cls=DecimalEncoder)
+            json.dump(dashboard_data, f, indent=2, cls=SafeEncoder)
         
         return dashboard_data
     
@@ -530,10 +540,14 @@ class FundMonitor:
                 try:
                     fund_data = {
                         'isin': r['isin'], 'nome': r['nome'], 'casa': r['casa'],
-                        'categoria': r['categoria'], 'price': r['analysis'].get('current_price'),
-                        'price_yesterday': None, 'change_pct': None, 'ma': r['analysis'].get('ma'),
-                        'rsi': r['analysis'].get('rsi'), 'signal': r['analysis'].get('final_signal', 'HOLD'),
-                        'signal_strength': r['analysis'].get('signal_strength', 0)
+                        'categoria': r['categoria'], 'price': float(r['analysis'].get('current_price')) if r['analysis'].get('current_price') else None,
+                        'price_yesterday': None, 'change_pct': None,
+                        'ma': float(r['analysis'].get('ma')) if r['analysis'].get('ma') else None,
+                        'rsi': float(r['analysis'].get('rsi')) if r['analysis'].get('rsi') else None,
+                        'pct_1d': float(r['analysis'].get('pct_change_1d')) if r['analysis'].get('pct_change_1d') is not None else None,
+                        'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
+                        'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
+                        'buy_count': int(r['analysis'].get('buy_count', 0))
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)
                 except:
