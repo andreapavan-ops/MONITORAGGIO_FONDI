@@ -7,33 +7,35 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e, #16213e); min-height: 100vh; color: #fff; }
-        .header { background: rgba(255,255,255,0.1); padding: 20px; text-align: center; }
-        .header h1 { font-size: 1.8em; }
-        .last-update { color: #aaa; font-size: 0.9em; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
-        .summary-card { background: rgba(255,255,255,0.1); border-radius: 12px; padding: 20px; text-align: center; }
-        .summary-card.buy { border-left: 4px solid #00B050; }
-        .summary-card.sell { border-left: 4px solid #DC3545; }
-        .summary-card.hold { border-left: 4px solid #FFC000; }
-        .summary-card.total { border-left: 4px solid #4472C4; }
-        .summary-card .number { font-size: 2.5em; font-weight: bold; }
-        .summary-card.buy .number { color: #00B050; }
-        .summary-card.sell .number { color: #DC3545; }
-        .summary-card.hold .number { color: #FFC000; }
-        .summary-card.total .number { color: #4472C4; }
+        .header { position: sticky; top: 0; z-index: 100; background: rgba(22,33,62,0.95); backdrop-filter: blur(8px); padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .header h1 { font-size: 1.1em; white-space: nowrap; }
+        .last-update { color: #aaa; font-size: 0.75em; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .summary-bar { display: flex; gap: 12px; align-items: center; }
+        .summary-item { display: flex; align-items: center; gap: 4px; font-size: 0.85em; }
+        .summary-item .number { font-weight: bold; font-size: 1.1em; }
+        .summary-item.buy .number { color: #00B050; }
+        .summary-item.sell .number { color: #DC3545; }
+        .summary-item.hold .number { color: #FFC000; }
+        .summary-item.total .number { color: #4472C4; }
+        .summary-item .label { color: #aaa; font-size: 0.8em; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 15px 20px; }
         .level-section { background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
         .level-header { padding: 12px 20px; font-weight: bold; display: flex; justify-content: space-between; }
         .level-1 .level-header { background: linear-gradient(90deg, #00B050, #00D060); }
         .level-2 .level-header { background: linear-gradient(90deg, #FFC000, #FFD000); color: #333; }
         .level-3 .level-header { background: linear-gradient(90deg, #4472C4, #5A8FD4); }
-        .fund-table { width: 100%; border-collapse: collapse; }
-        .fund-table th { background: rgba(0,0,0,0.3); padding: 10px 12px; text-align: left; }
-        .fund-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        /* Column widths shared between header and tables */
+        .col-nome { width: 28%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
+        .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-signal { width: 6%; }
+        .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
+        .column-header table { width: 100%; max-width: 1360px; margin: 0 auto; border-collapse: collapse; table-layout: fixed; }
+        .column-header th { padding: 8px 8px; text-align: left; font-size: 0.8em; font-weight: bold; color: #aaa; overflow: hidden; }
+        .fund-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .fund-table thead { display: none; }
+        .fund-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; }
         .fund-table tr:hover { background: rgba(255,255,255,0.05); }
-        .fund-name { display: block; font-weight: 500; }
-        .fund-isin { display: block; font-size: 0.75em; color: #888; font-family: monospace; margin-top: 2px; }
-        .signal { display: inline-block; padding: 4px 12px; border-radius: 15px; font-weight: bold; font-size: 0.8em; }
+        .signal { display: inline-block; padding: 3px 10px; border-radius: 12px; font-weight: bold; font-size: 0.75em; }
         .signal.buy { background: #00B050; }
         .signal.sell { background: #DC3545; }
         .signal.hold { background: #FFC000; color: #333; }
@@ -41,54 +43,76 @@
         .rsi.low { color: #00B050; }
         .rsi.mid { color: #FFC000; }
         .rsi.high { color: #DC3545; }
-        .change { font-weight: bold; }
-        .change.up { color: #00B050; }
-        .change.down { color: #DC3545; }
-        .change.flat { color: #888; }
-        .price-yesterday { color: #888; font-size: 0.9em; }
+        .pct { font-weight: bold; }
+        .pct.pos { color: #00B050; }
+        .pct.neg { color: #DC3545; }
+        .pct.zero { color: #aaa; }
+        .fund-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+        .fund-isin { display: block; font-size: 0.72em; color: #666; font-family: monospace; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
         .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
         .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
         .cat-btn:hover, .cat-btn.active { background: #4472C4; }
-        @media (max-width: 768px) { .fund-table { font-size: 0.85em; } }
+        @media (max-width: 768px) { .header { flex-wrap: wrap; gap: 4px; } .fund-table td, .column-header th { padding: 6px 4px; font-size: 0.72em; } }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 Fund Monitor Dashboard</h1>
+        <div class="header-left">
+            <h1>Fund Monitor</h1>
+            <div class="summary-bar">
+                <div class="summary-item total"><span class="number" id="totalFunds">-</span><span class="label">Totali</span></div>
+                <div class="summary-item buy"><span class="number" id="buySignals">-</span><span class="label">BUY</span></div>
+                <div class="summary-item hold"><span class="number" id="holdSignals">-</span><span class="label">HOLD</span></div>
+                <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
+            </div>
+        </div>
         <div class="last-update" id="lastUpdate">Caricamento...</div>
     </div>
-    
+
+    <div class="column-header">
+        <table>
+            <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
+            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr>
+        </table>
+    </div>
+
     <div class="container">
-        <div class="summary-grid">
-            <div class="summary-card total"><div class="number" id="totalFunds">-</div><div>Fondi Totali</div></div>
-            <div class="summary-card buy"><div class="number" id="buySignals">-</div><div>🟢 Segnali BUY</div></div>
-            <div class="summary-card hold"><div class="number" id="holdSignals">-</div><div>🟡 Segnali HOLD</div></div>
-            <div class="summary-card sell"><div class="number" id="sellSignals">-</div><div>🔴 Segnali SELL</div></div>
-        </div>
-        
+
         <div class="category-filters" id="categoryFilters"></div>
-        
+
         <div class="level-section level-1">
-            <div class="level-header"><span>🟢 LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
-            <table class="fund-table"><thead><tr><th>Fondo</th><th>Casa</th><th>Ieri</th><th>Oggi</th><th>Var%</th><th>MM15</th><th>RSI</th><th>Segnale</th></tr></thead><tbody id="level1Body"></tbody></table>
+            <div class="level-header"><span>LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
+            <table class="fund-table">
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <tbody id="level1Body"></tbody>
+            </table>
         </div>
 
         <div class="level-section level-2">
-            <div class="level-header"><span>🟡 LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
-            <table class="fund-table"><thead><tr><th>Fondo</th><th>Casa</th><th>Ieri</th><th>Oggi</th><th>Var%</th><th>MM15</th><th>RSI</th><th>Segnale</th></tr></thead><tbody id="level2Body"></tbody></table>
+            <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
+            <table class="fund-table">
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <tbody id="level2Body"></tbody>
+            </table>
         </div>
 
         <div class="level-section level-3">
-            <div class="level-header"><span>🔵 LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
-            <table class="fund-table"><thead><tr><th>Fondo</th><th>Categoria</th><th>Ieri</th><th>Oggi</th><th>Var%</th><th>MM15</th><th>RSI</th><th>Segnale</th></tr></thead><tbody id="level3Body"></tbody></table>
+            <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
+            <table class="fund-table">
+                <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-signal"></colgroup>
+                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>Segnale</th></tr></thead>
+                <tbody id="level3Body"></tbody>
+            </table>
         </div>
     </div>
 
     <script>
         let allData = null;
         let activeCategory = 'all';
-        
+
         async function loadData() {
             try {
                 const response = await fetch('data/dashboard_data.json');
@@ -99,67 +123,71 @@
                 console.error(e);
             }
         }
-        
+
         function renderDashboard() {
             if (!allData) return;
-            
-            // Update timestamp
+
             const dt = new Date(allData.last_update);
             document.getElementById('lastUpdate').textContent = `Ultimo aggiornamento: ${dt.toLocaleString('it-IT')}`;
-            
-            // Summary
+
             document.getElementById('totalFunds').textContent = allData.summary.total_funds;
             document.getElementById('buySignals').textContent = allData.summary.buy_signals;
             document.getElementById('holdSignals').textContent = allData.summary.hold_signals;
             document.getElementById('sellSignals').textContent = allData.summary.sell_signals;
-            
+
             // Category filters
             const categories = Object.keys(allData.categories || {});
             const filterHtml = `<button class="cat-btn ${activeCategory==='all'?'active':''}" onclick="filterCategory('all')">Tutti</button>` +
                 categories.map(c => `<button class="cat-btn ${activeCategory===c?'active':''}" onclick="filterCategory('${c}')">${c}</button>`).join('');
             document.getElementById('categoryFilters').innerHTML = filterHtml;
-            
-            // Render levels
+
             renderLevel(1, allData.levels['1'] || []);
             renderLevel(2, allData.levels['2'] || []);
             renderLevel(3, allData.levels['3'] || []);
         }
-        
+
         function filterCategory(cat) {
             activeCategory = cat;
             renderDashboard();
         }
-        
+
         function renderLevel(level, funds) {
             const filtered = activeCategory === 'all' ? funds : funds.filter(f => f.categoria === activeCategory);
             const tbody = document.getElementById(`level${level}Body`);
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
-            
+
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="empty-msg">${level < 3 ? 'Nessun fondo in questo livello' : 'Nessun fondo con questa categoria'}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="empty-msg">Nessun fondo in questo livello</td></tr>`;
                 return;
             }
 
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const signalClass = f.signal.toLowerCase();
-                const changeClass = f.change_pct > 0 ? 'up' : f.change_pct < 0 ? 'down' : 'flat';
-                const changeSign = f.change_pct > 0 ? '+' : '';
+                const signalClass = f.signal ? f.signal.toLowerCase() : 'hold';
+                const secondCol = level === 3 ? f.categoria : f.casa;
+                const fmtPct = v => {
+                    if (v == null) return '<td class="pct zero">-</td>';
+                    const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+                    const sign = v > 0 ? '+' : '';
+                    return `<td class="pct ${cls}">${sign}${v.toFixed(2)}%</td>`;
+                };
+
                 return `<tr>
-                    <td><span class="fund-name">${f.nome || '-'}</span><span class="fund-isin">${f.isin || ''}</span></td>
-                    <td>${level === 3 ? f.categoria : f.casa}</td>
-                    <td class="price-yesterday">${f.price_yesterday ? '€' + f.price_yesterday.toFixed(2) : '-'}</td>
-                    <td>€${f.price ? f.price.toFixed(2) : '-'}</td>
-                    <td class="change ${changeClass}">${f.change_pct != null ? changeSign + f.change_pct.toFixed(2) + '%' : '-'}</td>
-                    <td>€${f.ma ? f.ma.toFixed(2) : '-'}</td>
+                    <td class="fund-name" title="${f.isin || ''}">${f.nome || '-'}<span class="fund-isin">${f.isin || ''}</span></td>
+                    <td>${secondCol || '-'}</td>
+                    <td>${f.price ? f.price.toFixed(2) : '-'}</td>
+                    ${fmtPct(f.pct_1d)}
+                    ${fmtPct(f.pct_1w)}
+                    ${fmtPct(f.pct_1m)}
+                    <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td><span class="signal ${signalClass}">${f.signal}</span></td>
+                    <td><span class="signal ${signalClass}">${f.signal || 'HOLD'}</span></td>
                 </tr>`;
             }).join('');
         }
-        
+
         loadData();
-        setInterval(loadData, 60000); // Refresh ogni minuto
+        setInterval(loadData, 60000);
     </script>
 </body>
 </html>
