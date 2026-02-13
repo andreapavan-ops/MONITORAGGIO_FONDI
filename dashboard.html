@@ -34,6 +34,7 @@
         .buy-count.bc2 { color: #FFC000; }
         .buy-count.bc1 { color: #ff9966; }
         .buy-count.bc0 { color: #888; }
+        .cond-dots { font-size: 0.7em; margin-left: 3px; letter-spacing: 1px; }
         .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
         .legend strong { color: #fff; }
         .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
@@ -244,7 +245,7 @@
                     ${fmtPct(f.pct_1m)}
                     <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="buy-count bc${f.buy_count || 0}">${f.buy_count || 0}/4</td>
+                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `T:${f.conditions.trend_ok?'OK':'NO'} R:${f.conditions.rsi_optimal?'OK':'NO'} B:${f.conditions.nav_above_bb?'OK':'NO'} S:${f.conditions.nav_rising?'OK':'NO'}` : ''}">${f.buy_count || 0}/4 ${f.conditions ? `<span class="cond-dots">${f.conditions.trend_ok?'<span style="color:#0f0">T</span>':'<span style="color:#555">T</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0">R</span>':'<span style="color:#555">R</span>'}${f.conditions.nav_above_bb?'<span style="color:#0f0">B</span>':'<span style="color:#555">B</span>'}${f.conditions.nav_rising?'<span style="color:#0f0">S</span>':'<span style="color:#555">S</span>'}</span>` : ''}</td>
                 </tr>`;
             }).join('');
         }

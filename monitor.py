@@ -402,10 +402,16 @@ class FundMonitor:
                 'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                 'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
                 'buy_count': int(r['analysis'].get('buy_count', 0)),
-                'asset_type': r['analysis'].get('asset_type', 'equity')
+                'asset_type': r['analysis'].get('asset_type', 'equity'),
+                'conditions': {
+                    'trend_ok': bool(r['analysis'].get('conditions', {}).get('trend_ok', False)),
+                    'rsi_optimal': bool(r['analysis'].get('conditions', {}).get('rsi_optimal', False)),
+                    'nav_above_bb': bool(r['analysis'].get('conditions', {}).get('nav_above_upper_bb', False)),
+                    'nav_rising': bool(r['analysis'].get('conditions', {}).get('nav_rising', False)),
+                }
             }
             dashboard_data['levels'][level].append(fund_data)
-            
+
             # Dati per categoria
             if category not in dashboard_data['categories']:
                 dashboard_data['categories'][category] = []
@@ -571,7 +577,13 @@ class FundMonitor:
                         'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                         'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
                         'buy_count': int(r['analysis'].get('buy_count', 0)),
-                        'asset_type': r['analysis'].get('asset_type', 'equity')
+                        'asset_type': r['analysis'].get('asset_type', 'equity'),
+                        'conditions': {
+                            'trend_ok': bool(r['analysis'].get('conditions', {}).get('trend_ok', False)),
+                            'rsi_optimal': bool(r['analysis'].get('conditions', {}).get('rsi_optimal', False)),
+                            'nav_above_bb': bool(r['analysis'].get('conditions', {}).get('nav_above_upper_bb', False)),
+                            'nav_rising': bool(r['analysis'].get('conditions', {}).get('nav_rising', False)),
+                        }
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)
                 except:
