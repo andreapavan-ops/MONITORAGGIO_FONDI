@@ -32,6 +32,7 @@ class TechnicalAnalyzer:
             'rsi_optimal_high': 68,
             'max_distance_from_ma': 6.0,
             'ma_signal_threshold': 2.0,  # % sopra/sotto MM per segnale BUY/SELL
+            'bb_condition': 'upper_half',  # NAV nel 50% superiore delle bande BB
         },
         'bond': {
             'ma_period': 20,
@@ -45,6 +46,7 @@ class TechnicalAnalyzer:
             'rsi_optimal_high': 58,
             'max_distance_from_ma': 1.5,
             'ma_signal_threshold': 0.5,  # % sopra/sotto MM per segnale BUY/SELL
+            'bb_condition': 'above_ma',  # NAV sopra la media BB (= MM20)
         },
         # Profilo intermedio per Corporate, High Yield, Flessibili, EM Bonds
         'bond_hy': {
@@ -59,6 +61,7 @@ class TechnicalAnalyzer:
             'rsi_optimal_high': 63,
             'max_distance_from_ma': 3.0,
             'ma_signal_threshold': 1.0,
+            'bb_condition': 'above_ma',  # NAV sopra la media BB (= MM20)
         },
     }
 
@@ -121,6 +124,7 @@ class TechnicalAnalyzer:
         self.rsi_optimal_high = profile['rsi_optimal_high']
         self.max_distance_from_ma = profile['max_distance_from_ma']
         self.ma_signal_threshold = profile.get('ma_signal_threshold', 2.0)
+        self.bb_condition = profile.get('bb_condition', 'upper_half')
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -316,8 +320,16 @@ class TechnicalAnalyzer:
         # Condizione 2: MOMENTUM (RSI 55-68)
         rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
 
-        # Condizione 3: VOLATILITA (NAV sopra banda superiore Bollinger)
-        nav_above_upper_bb = (current_price > bb_upper) if bb_upper is not None else False
+        # Condizione 3: VOLATILITA (posizione nelle Bande di Bollinger)
+        # Equity: NAV nel 50% superiore delle bande (midpoint tra MA e banda superiore)
+        # Bond/Bond_HY: NAV sopra la media BB (= MM20)
+        if self.bb_condition == 'upper_half' and bb_upper is not None and ma_current is not None:
+            bb_midpoint = (ma_current + bb_upper) / 2
+            nav_above_upper_bb = current_price >= bb_midpoint
+        elif self.bb_condition == 'above_ma' and ma_current is not None:
+            nav_above_upper_bb = current_price > ma_current
+        else:
+            nav_above_upper_bb = False
 
         # Condizione 4: SETUP (NAV in salita per 2+ giorni)
         nav_rising = rising_days >= 2
@@ -346,7 +358,8 @@ class TechnicalAnalyzer:
             reason = 'Prezzo sotto Media Mobile'
         elif trend_ok and rsi_optimal and nav_above_upper_bb and nav_rising:
             suggested = 1
-            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, NAV>BB sup, {rising_days}gg salita'
+            bb_label = 'BB 50%+' if self.bb_condition == 'upper_half' else 'NAV>MM'
+            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, {bb_label}, {rising_days}gg salita'
         elif price_above_ma_3days:
             suggested = 2
             reason = f'Prezzo sopra MM da {days_above} giorni consecutivi'
