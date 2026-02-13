@@ -48,6 +48,27 @@
         .pct.zero { color: #aaa; }
         .fund-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
         .fund-isin { display: block; font-size: 0.72em; color: #666; font-family: monospace; }
+        .health-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; cursor: pointer; margin-right: 6px; animation: pulse 2s infinite; }
+        .health-dot.green { background: #00B050; box-shadow: 0 0 6px #00B050; }
+        .health-dot.yellow { background: #FFC000; box-shadow: 0 0 6px #FFC000; }
+        .health-dot.red { background: #DC3545; box-shadow: 0 0 6px #DC3545; }
+        .health-dot.grey { background: #666; box-shadow: none; animation: none; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .health-badge { display: flex; align-items: center; cursor: pointer; padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.1); font-size: 0.75em; gap: 4px; }
+        .health-badge:hover { background: rgba(255,255,255,0.2); }
+        .health-panel { display: none; position: fixed; top: 50px; right: 20px; width: 380px; background: rgba(22,33,62,0.98); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 16px; z-index: 200; box-shadow: 0 8px 32px rgba(0,0,0,0.5); backdrop-filter: blur(12px); }
+        .health-panel.open { display: block; }
+        .health-panel h3 { margin: 0 0 12px 0; font-size: 0.95em; color: #fff; }
+        .health-panel .hp-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.82em; }
+        .health-panel .hp-label { color: #aaa; }
+        .health-panel .hp-value { font-weight: bold; }
+        .health-panel .hp-value.ok { color: #00B050; }
+        .health-panel .hp-value.warn { color: #FFC000; }
+        .health-panel .hp-value.err { color: #DC3545; }
+        .health-panel .hp-errors { margin-top: 10px; max-height: 120px; overflow-y: auto; }
+        .health-panel .hp-error-item { padding: 4px 6px; background: rgba(220,53,69,0.15); border-radius: 4px; margin-bottom: 4px; font-size: 0.75em; color: #ff8a8a; font-family: monospace; }
+        .health-panel .hp-close { position: absolute; top: 8px; right: 12px; cursor: pointer; color: #888; font-size: 1.2em; }
+        .health-panel .hp-close:hover { color: #fff; }
         .empty-msg { padding: 30px; text-align: center; color: #888; }
         .category-filters { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
         .cat-btn { padding: 6px 14px; border: none; border-radius: 15px; background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; }
@@ -66,7 +87,28 @@
                 <div class="summary-item sell"><span class="number" id="sellSignals">-</span><span class="label">SELL</span></div>
             </div>
         </div>
-        <div class="last-update" id="lastUpdate">Caricamento...</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div class="health-badge" onclick="toggleHealthPanel()" id="healthBadge" title="Clicca per diagnostica">
+                <span class="health-dot grey" id="healthDot"></span>
+                <span id="healthLabel">Verifica...</span>
+            </div>
+            <div class="last-update" id="lastUpdate">Caricamento...</div>
+        </div>
+    </div>
+
+    <div class="health-panel" id="healthPanel">
+        <span class="hp-close" onclick="toggleHealthPanel()">&times;</span>
+        <h3>Diagnostica Sistema</h3>
+        <div class="hp-row"><span class="hp-label">Stato</span><span class="hp-value" id="hpStatus">-</span></div>
+        <div class="hp-row"><span class="hp-label">Ultimo aggiornamento</span><span class="hp-value" id="hpLastUpdate">-</span></div>
+        <div class="hp-row"><span class="hp-label">Ore da ultimo update</span><span class="hp-value" id="hpHours">-</span></div>
+        <div class="hp-row"><span class="hp-label">Database PostgreSQL</span><span class="hp-value" id="hpDb">-</span></div>
+        <div class="hp-row"><span class="hp-label">Fondi analizzati</span><span class="hp-value" id="hpFundsOk">-</span></div>
+        <div class="hp-row"><span class="hp-label">Fondi con errore</span><span class="hp-value" id="hpFundsErr">-</span></div>
+        <div class="hp-row"><span class="hp-label">Fondi con prezzo</span><span class="hp-value" id="hpWithPrice">-</span></div>
+        <div class="hp-row"><span class="hp-label">Fondi senza prezzo</span><span class="hp-value" id="hpNoPrice">-</span></div>
+        <div class="hp-row"><span class="hp-label">Monitor in esecuzione</span><span class="hp-value" id="hpRunning">-</span></div>
+        <div class="hp-errors" id="hpErrors"></div>
     </div>
 
     <div class="column-header">
@@ -192,8 +234,86 @@
             }).join('');
         }
 
+        function toggleHealthPanel() {
+            document.getElementById('healthPanel').classList.toggle('open');
+        }
+
+        // Chiudi pannello cliccando fuori
+        document.addEventListener('click', function(e) {
+            const panel = document.getElementById('healthPanel');
+            const badge = document.getElementById('healthBadge');
+            if (panel.classList.contains('open') && !panel.contains(e.target) && !badge.contains(e.target)) {
+                panel.classList.remove('open');
+            }
+        });
+
+        async function loadHealth() {
+            try {
+                const res = await fetch('/api/health');
+                const h = await res.json();
+
+                const dot = document.getElementById('healthDot');
+                const label = document.getElementById('healthLabel');
+
+                dot.className = 'health-dot ' + (h.status || 'grey');
+
+                if (h.status === 'green') label.textContent = 'OK';
+                else if (h.status === 'yellow') label.textContent = 'Attenzione';
+                else if (h.status === 'red') label.textContent = 'Problema';
+                else label.textContent = '?';
+
+                // Pannello dettagli
+                const cls = v => v ? 'ok' : 'err';
+                document.getElementById('hpStatus').textContent = h.message || '-';
+                document.getElementById('hpStatus').className = 'hp-value ' + (h.status === 'green' ? 'ok' : h.status === 'yellow' ? 'warn' : 'err');
+
+                if (h.last_update) {
+                    const dt = new Date(h.last_update);
+                    document.getElementById('hpLastUpdate').textContent = dt.toLocaleString('it-IT');
+                }
+                const hrs = h.hours_since_update;
+                const hpHours = document.getElementById('hpHours');
+                hpHours.textContent = hrs != null ? hrs + 'h' : '-';
+                hpHours.className = 'hp-value ' + (hrs != null && hrs <= 24 ? 'ok' : 'err');
+
+                const hpDb = document.getElementById('hpDb');
+                hpDb.textContent = h.database?.connected ? 'Connesso' : 'Non disponibile';
+                hpDb.className = 'hp-value ' + (h.database?.connected ? 'ok' : 'err');
+
+                const f = h.funds || {};
+                document.getElementById('hpFundsOk').textContent = (f.analyzed_ok || 0) + '/' + (f.total || 0);
+                document.getElementById('hpFundsOk').className = 'hp-value ' + (f.errors === 0 ? 'ok' : 'warn');
+
+                const hpErr = document.getElementById('hpFundsErr');
+                hpErr.textContent = f.errors || 0;
+                hpErr.className = 'hp-value ' + (f.errors === 0 ? 'ok' : 'err');
+
+                document.getElementById('hpWithPrice').textContent = f.with_price || 0;
+                const hpNp = document.getElementById('hpNoPrice');
+                hpNp.textContent = f.no_price || 0;
+                hpNp.className = 'hp-value ' + (f.no_price === 0 ? 'ok' : 'warn');
+
+                document.getElementById('hpRunning').textContent = h.monitor_running ? 'Si' : 'No';
+
+                // Errori dettaglio
+                const errDiv = document.getElementById('hpErrors');
+                const errs = f.error_details || [];
+                if (errs.length > 0) {
+                    errDiv.innerHTML = '<div style="color:#aaa;font-size:0.8em;margin-bottom:4px;">Dettaglio errori:</div>' +
+                        errs.map(e => '<div class="hp-error-item">' + e.isin + ': ' + (e.error || '').substring(0, 60) + '</div>').join('');
+                } else {
+                    errDiv.innerHTML = '';
+                }
+            } catch (e) {
+                document.getElementById('healthDot').className = 'health-dot grey';
+                document.getElementById('healthLabel').textContent = 'Offline';
+            }
+        }
+
         loadData();
+        loadHealth();
         setInterval(loadData, 60000);
+        setInterval(loadHealth, 120000);
     </script>
 </body>
 </html>

@@ -233,6 +233,92 @@ def get_monitor_log():
     })
 
 
+@app.route('/api/health')
+def health_check():
+    """Endpoint completo di health check del sistema"""
+    now = datetime.now()
+
+    # 1. Leggi health dal dashboard_data.json (generato dal monitor)
+    health = {}
+    last_update = None
+    try:
+        with open('data/dashboard_data.json', 'r') as f:
+            data = json.load(f)
+        health = data.get('health', {})
+        last_update = data.get('last_update')
+    except Exception:
+        pass
+
+    # 2. Calcola freshness (quanto e' vecchio l'ultimo aggiornamento)
+    stale = True
+    hours_since_update = None
+    if last_update:
+        try:
+            last_dt = datetime.fromisoformat(last_update)
+            delta = now - last_dt
+            hours_since_update = round(delta.total_seconds() / 3600, 1)
+            # Consideriamo fresco se aggiornato nelle ultime 24h
+            stale = hours_since_update > 24
+        except Exception:
+            pass
+
+    # 3. Database status
+    db_ok = False
+    db_stats = {}
+    try:
+        db_ok = db.is_available()
+        if db_ok:
+            db_stats = db.get_stats()
+    except Exception:
+        pass
+
+    # 4. Calcola stato globale
+    funds_ok = health.get('funds_ok', 0)
+    funds_error = health.get('funds_error', 0)
+    total_funds = health.get('total_funds', 0)
+    funds_with_price = health.get('funds_with_price', 0)
+
+    if not stale and funds_error == 0 and db_ok and funds_with_price == funds_ok:
+        status = 'green'
+        message = 'Sistema operativo - tutti i fondi aggiornati'
+    elif stale:
+        status = 'red'
+        message = f'Dati non aggiornati da {hours_since_update}h'
+    elif funds_error > 0 or not db_ok:
+        status = 'yellow'
+        problems = []
+        if funds_error > 0:
+            problems.append(f'{funds_error} fondi con errore')
+        if not db_ok:
+            problems.append('DB non raggiungibile')
+        message = ' | '.join(problems)
+    else:
+        status = 'yellow'
+        message = 'Stato parziale'
+
+    return jsonify({
+        'status': status,
+        'message': message,
+        'last_update': last_update,
+        'hours_since_update': hours_since_update,
+        'stale': stale,
+        'monitor_running': monitor_lock.is_running(),
+        'database': {
+            'connected': db_ok,
+            'stats': db_stats
+        },
+        'funds': {
+            'total': total_funds,
+            'analyzed_ok': funds_ok,
+            'errors': funds_error,
+            'with_price': funds_with_price,
+            'no_price': health.get('funds_no_price', 0),
+            'error_details': health.get('errors', [])
+        },
+        'checked_at': now.isoformat()
+    })
+
+
 @app.route('/api/backfill')
 def backfill():
     """Backfill storico prezzi: recupera ultimi 50 giorni da Yahoo Finance e salva in DB"""

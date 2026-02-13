@@ -421,9 +421,13 @@ class FundMonitor:
                     return obj.tolist()
                 return super().default(obj)
 
+        # Includi report di salute se disponibile
+        if hasattr(self, '_health_report'):
+            dashboard_data['health'] = self._health_report
+
         with open('data/dashboard_data.json', 'w') as f:
             json.dump(dashboard_data, f, indent=2, cls=SafeEncoder)
-        
+
         return dashboard_data
     
     def send_alerts(self, results: list):
@@ -509,6 +513,18 @@ class FundMonitor:
 
         add_log(f"Analisi completata: {len(results)} OK, {len(errors)} errori")
 
+        # Salva report di salute per la dashboard e le email
+        self._health_report = {
+            'timestamp': datetime.now().isoformat(),
+            'total_funds': len(df_funds),
+            'funds_ok': len(results),
+            'funds_error': len(errors),
+            'errors': [{'isin': e['isin'], 'error': e['error']} for e in errors],
+            'db_available': self.db.is_available() if self.db else False,
+            'funds_with_price': sum(1 for r in results if r['analysis'].get('current_price') is not None),
+            'funds_no_price': sum(1 for r in results if r['analysis'].get('current_price') is None),
+        }
+
         # 3. Aggiorna Excel
         try:
             add_log("Step 3: Aggiornamento file Excel...")
@@ -580,6 +596,15 @@ class FundMonitor:
                 add_log("Step 6: Report OK")
             except Exception as e:
                 add_log(f"Step 6 ERRORE Report: {e}")
+
+        # 7. Health report via email
+        if hasattr(self, '_health_report'):
+            try:
+                add_log("Step 7: Invio health report...")
+                self.alert_system.send_health_report(self._health_report)
+                add_log("Step 7: Health report OK")
+            except Exception as e:
+                add_log(f"Step 7 ERRORE Health report: {e}")
 
         add_log(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
         add_log("="*50)

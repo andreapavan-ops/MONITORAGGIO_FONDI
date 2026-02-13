@@ -305,6 +305,109 @@ class AlertSystem:
         
         return self._send_email(subject, body_html)
     
+    def send_health_report(self, health: dict) -> bool:
+        """
+        Invia report sullo stato di salute del sistema.
+
+        Args:
+            health: Dizionario con dati health dal monitor
+        """
+        total = health.get('total_funds', 0)
+        ok = health.get('funds_ok', 0)
+        errors_count = health.get('funds_error', 0)
+        with_price = health.get('funds_with_price', 0)
+        no_price = health.get('funds_no_price', 0)
+        db_ok = health.get('db_available', False)
+        errors = health.get('errors', [])
+
+        # Determina stato globale
+        if errors_count == 0 and with_price == ok and db_ok:
+            status_emoji = "🟢"
+            status_text = "TUTTO OK"
+            status_color = "#00B050"
+        elif errors_count > 0 or no_price > 0:
+            status_emoji = "🟡"
+            status_text = "ATTENZIONE"
+            status_color = "#FFC000"
+        else:
+            status_emoji = "🔴"
+            status_text = "PROBLEMI"
+            status_color = "#DC3545"
+
+        # Se tutto perfetto, non mandare email (evita spam)
+        if errors_count == 0 and no_price == 0 and db_ok:
+            print("✅ Health check OK - email non necessaria")
+            return True
+
+        subject = f"{status_emoji} Health Check - {status_text} - {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+
+        # Tabella errori
+        errors_html = ""
+        if errors:
+            errors_rows = "".join(
+                f'<tr><td style="padding:6px;border:1px solid #ddd;font-family:monospace;">{e["isin"]}</td>'
+                f'<td style="padding:6px;border:1px solid #ddd;color:#DC3545;">{e["error"][:80]}</td></tr>'
+                for e in errors
+            )
+            errors_html = f"""
+            <h3 style="color:#DC3545;">Fondi con errore</h3>
+            <table style="width:100%;border-collapse:collapse;background:white;">
+                <tr style="background:#DC3545;color:white;">
+                    <th style="padding:6px;border:1px solid #ddd;">ISIN</th>
+                    <th style="padding:6px;border:1px solid #ddd;">Errore</th>
+                </tr>
+                {errors_rows}
+            </table>
+            """
+
+        body_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: {status_color}; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin: 0;">{status_emoji} HEALTH CHECK: {status_text}</h1>
+                <p style="margin: 5px 0 0 0;">{datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+            </div>
+
+            <div style="padding: 20px; background: #f5f5f5;">
+                <table style="width:100%;border-collapse:collapse;background:white;margin-bottom:15px;">
+                    <tr>
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Fondi totali</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;">{total}</td>
+                    </tr>
+                    <tr style="background:#e8e8e8;">
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Analizzati OK</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;color:#00B050;font-weight:bold;">{ok}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Errori analisi</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;color:{'#DC3545' if errors_count > 0 else '#00B050'};font-weight:bold;">{errors_count}</td>
+                    </tr>
+                    <tr style="background:#e8e8e8;">
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Con prezzo aggiornato</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;">{with_price}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Senza prezzo</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;color:{'#DC3545' if no_price > 0 else '#00B050'};font-weight:bold;">{no_price}</td>
+                    </tr>
+                    <tr style="background:#e8e8e8;">
+                        <td style="padding:10px;border:1px solid #ddd;"><strong>Database PostgreSQL</strong></td>
+                        <td style="padding:10px;border:1px solid #ddd;text-align:center;color:{'#00B050' if db_ok else '#DC3545'};font-weight:bold;">{'Connesso' if db_ok else 'Non disponibile'}</td>
+                    </tr>
+                </table>
+
+                {errors_html}
+            </div>
+
+            <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
+                Fund Monitor System - Health Check Automatico
+            </div>
+        </body>
+        </html>
+        """
+
+        return self._send_email(subject, body_html)
+
     def send_test_email(self) -> bool:
         """Invia email di test per verificare configurazione"""
         subject = "🧪 Test Fund Monitor System"
