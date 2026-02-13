@@ -76,6 +76,10 @@ class TechnicalAnalyzer:
             return 'equity'
         cat_lower = categoria.lower()
 
+        # Monetari → profilo bond (bassissima volatilita')
+        if 'monetar' in cat_lower or 'money market' in cat_lower or 'liquidity' in cat_lower:
+            return 'bond'
+
         # Prima controlla se e' obbligazionario
         is_bond = 'obblig' in cat_lower or 'bond' in cat_lower or 'fixed' in cat_lower or 'reddito' in cat_lower
 
@@ -84,7 +88,7 @@ class TechnicalAnalyzer:
 
         # Distingui bond ad alta volatilita' (profilo intermedio)
         hy_keywords = ['corporate', 'high yield', 'flessibil', 'flexible', 'emerging',
-                       'credit', 'convertib', 'subordinat', 'total return']
+                       'emergent', 'credit', 'convertib', 'subordinat', 'total return']
         if any(kw in cat_lower for kw in hy_keywords):
             return 'bond_hy'
 
