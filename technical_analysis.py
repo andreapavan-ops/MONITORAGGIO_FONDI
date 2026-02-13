@@ -18,31 +18,77 @@ from typing import Dict, List, Tuple, Optional
 class TechnicalAnalyzer:
     """Classe per calcolare indicatori tecnici sui fondi"""
 
-    def __init__(self, config: dict = None):
+    # Profili parametri per tipo di asset
+    PROFILES = {
+        'equity': {
+            'ma_period': 20,
+            'rsi_period': 14,
+            'rsi_oversold': 30,
+            'rsi_overbought': 70,
+            'bollinger_period': 20,
+            'bollinger_std': 2.0,
+            'days_above_ma': 3,
+            'rsi_optimal_low': 55,
+            'rsi_optimal_high': 68,
+            'max_distance_from_ma': 6.0,
+            'ma_signal_threshold': 2.0,  # % sopra/sotto MM per segnale BUY/SELL
+        },
+        'bond': {
+            'ma_period': 20,
+            'rsi_period': 14,
+            'rsi_oversold': 38,
+            'rsi_overbought': 62,
+            'bollinger_period': 20,
+            'bollinger_std': 1.5,
+            'days_above_ma': 3,
+            'rsi_optimal_low': 48,
+            'rsi_optimal_high': 58,
+            'max_distance_from_ma': 1.5,
+            'ma_signal_threshold': 0.5,  # % sopra/sotto MM per segnale BUY/SELL
+        },
+    }
+
+    @staticmethod
+    def detect_asset_type(categoria: str) -> str:
+        """
+        Rileva il tipo di asset dalla categoria del fondo.
+
+        Returns:
+            'bond' se obbligazionario, 'equity' altrimenti
+        """
+        if not categoria:
+            return 'equity'
+        cat_lower = categoria.lower()
+        if 'obblig' in cat_lower or 'bond' in cat_lower or 'fixed' in cat_lower or 'reddito' in cat_lower:
+            return 'bond'
+        return 'equity'
+
+    def __init__(self, config: dict = None, asset_type: str = 'equity'):
         """
         Inizializza l'analizzatore tecnico
 
         Args:
-            config: Dizionario di configurazione con:
-                - ma_period: Periodo media mobile (default: 20)
-                - rsi_period: Periodo RSI (default: 14)
-                - bollinger_period: Periodo Bollinger (default: 20)
-                - bollinger_std: Deviazioni standard Bollinger (default: 2)
-                - days_above_ma: Giorni sopra MM per passaggio L3→L2 (default: 3)
-                - rsi_optimal_low: RSI minimo per L1 (default: 55)
-                - rsi_optimal_high: RSI massimo per L1 (default: 65)
+            config: Dizionario di configurazione (sovrascrive i default del profilo)
+            asset_type: Tipo di asset ('equity' o 'bond')
         """
-        self.config = config or {}
-        self.ma_period = self.config.get('ma_period', 20)
-        self.rsi_period = self.config.get('rsi_period', 14)
-        self.rsi_oversold = self.config.get('rsi_oversold', 30)
-        self.rsi_overbought = self.config.get('rsi_overbought', 70)
-        self.bollinger_period = self.config.get('bollinger_period', 20)
-        self.bollinger_std = self.config.get('bollinger_std', 2)
-        self.days_above_ma = self.config.get('days_above_ma', 3)
-        self.rsi_optimal_low = self.config.get('rsi_optimal_low', 55)
-        self.rsi_optimal_high = self.config.get('rsi_optimal_high', 68)
-        self.max_distance_from_ma = self.config.get('max_distance_from_ma', 6.0)  # Max 6% dal MM20
+        self.asset_type = asset_type
+        profile = self.PROFILES.get(asset_type, self.PROFILES['equity']).copy()
+
+        # Sovrascritture da config
+        if config:
+            profile.update(config)
+
+        self.ma_period = profile['ma_period']
+        self.rsi_period = profile['rsi_period']
+        self.rsi_oversold = profile['rsi_oversold']
+        self.rsi_overbought = profile['rsi_overbought']
+        self.bollinger_period = profile['bollinger_period']
+        self.bollinger_std = profile['bollinger_std']
+        self.days_above_ma = profile['days_above_ma']
+        self.rsi_optimal_low = profile['rsi_optimal_low']
+        self.rsi_optimal_high = profile['rsi_optimal_high']
+        self.max_distance_from_ma = profile['max_distance_from_ma']
+        self.ma_signal_threshold = profile.get('ma_signal_threshold', 2.0)
     
     def calculate_ma(self, prices: pd.Series, period: int = None) -> pd.Series:
         """
@@ -361,10 +407,11 @@ class TechnicalAnalyzer:
             return 'HOLD'
         
         pct_diff = (current_price - ma_value) / ma_value * 100
-        
-        if pct_diff > 2:  # Sopra MA del 2%+
+        threshold = self.ma_signal_threshold
+
+        if pct_diff > threshold:
             return 'BUY'
-        elif pct_diff < -2:  # Sotto MA del 2%+
+        elif pct_diff < -threshold:
             return 'SELL'
         else:
             return 'HOLD'

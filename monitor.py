@@ -214,14 +214,20 @@ class FundMonitor:
                 prices = pd.Series(df_hist['nav'].values)
             # Se ancora insufficiente, l'analisi restituirà "dati insufficienti"
         
-        # Esegui analisi
-        analysis = self.analyzer.analyze_fund(prices, level=level)
-        
+        # Rileva tipo di asset dalla categoria e crea analyzer dedicato
+        categoria = row['Categoria']
+        asset_type = TechnicalAnalyzer.detect_asset_type(categoria)
+        analyzer = TechnicalAnalyzer(asset_type=asset_type)
+
+        # Esegui analisi con parametri calibrati per il tipo di fondo
+        analysis = analyzer.analyze_fund(prices, level=level)
+        analysis['asset_type'] = asset_type
+
         return {
             'isin': isin,
             'nome': row['Nome Fondo'],
             'casa': row['Casa Gestione'],
-            'categoria': row['Categoria'],
+            'categoria': categoria,
             'livello': level,
             'analysis': analysis
         }
@@ -395,7 +401,8 @@ class FundMonitor:
                 'pct_1d': float(r['analysis'].get('pct_change_1d')) if r['analysis'].get('pct_change_1d') is not None else None,
                 'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                 'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
-                'buy_count': int(r['analysis'].get('buy_count', 0))
+                'buy_count': int(r['analysis'].get('buy_count', 0)),
+                'asset_type': r['analysis'].get('asset_type', 'equity')
             }
             dashboard_data['levels'][level].append(fund_data)
             
@@ -563,7 +570,8 @@ class FundMonitor:
                         'pct_1d': float(r['analysis'].get('pct_change_1d')) if r['analysis'].get('pct_change_1d') is not None else None,
                         'pct_1w': float(r['analysis'].get('pct_change_1w')) if r['analysis'].get('pct_change_1w') is not None else None,
                         'pct_1m': float(r['analysis'].get('pct_change_1m')) if r['analysis'].get('pct_change_1m') is not None else None,
-                        'buy_count': int(r['analysis'].get('buy_count', 0))
+                        'buy_count': int(r['analysis'].get('buy_count', 0)),
+                        'asset_type': r['analysis'].get('asset_type', 'equity')
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)
                 except:

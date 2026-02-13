@@ -122,10 +122,14 @@
 
         <div class="legend">
             <strong>L1 Pro - Condizioni BUY (4/4 richieste):</strong>
-            1. Trend: NAV &gt; MM20 per 3+ gg, slope+, distanza &lt;6% |
-            2. Momentum: RSI 55-68 |
+            1. Trend: NAV &gt; MM20 per 3+ gg, slope+, distanza &lt;soglia |
+            2. Momentum: RSI in zona ottimale |
             3. Volatilit&agrave;: NAV &gt; Banda Bollinger superiore |
             4. Setup: NAV in salita per 2+ gg consecutivi
+            <br>
+            <span style="color:#6ab7ff;">Azionari:</span> RSI 55-68, dist &lt;6%, BB &plusmn;2&sigma;, segnale MA &plusmn;2%
+            &nbsp;|&nbsp;
+            <span style="color:#ffb347;">Obbligazionari:</span> RSI 48-58, dist &lt;1.5%, BB &plusmn;1.5&sigma;, segnale MA &plusmn;0.5%
         </div>
 
         <div class="category-filters" id="categoryFilters"></div>
@@ -212,6 +216,7 @@
 
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
+                const typeTag = f.asset_type === 'bond' ? '<span style="color:#ffb347;font-size:0.7em;" title="Obbligazionario - parametri calibrati">OBB</span>' : '';
                 const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">-</td>';
@@ -221,7 +226,7 @@
                 };
 
                 return `<tr>
-                    <td class="fund-name" title="${f.isin || ''}">${f.nome || '-'}<span class="fund-isin">${f.isin || ''}</span></td>
+                    <td class="fund-name" title="${f.isin || ''}">${f.nome || '-'} ${typeTag}<span class="fund-isin">${f.isin || ''}</span></td>
                     <td>${secondCol || '-'}</td>
                     <td>${f.price ? f.price.toFixed(2) : '-'}</td>
                     ${fmtPct(f.pct_1d)}
