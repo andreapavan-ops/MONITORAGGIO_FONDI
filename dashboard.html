@@ -29,6 +29,11 @@
         .col-nome { width: 28%; } .col-casa { width: 10%; } .col-prezzo { width: 8%; }
         .col-pct { width: 7%; } .col-ma { width: 8%; } .col-rsi { width: 6%; } .col-buy { width: 6%; }
         .buy-count { font-weight: bold; font-size: 0.85em; }
+        .buy-count.bc4 { color: #00ff88; text-shadow: 0 0 6px #00ff88; }
+        .buy-count.bc3 { color: #7fff00; }
+        .buy-count.bc2 { color: #FFC000; }
+        .buy-count.bc1 { color: #ff9966; }
+        .buy-count.bc0 { color: #888; }
         .legend { margin-bottom: 12px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.78em; color: #aaa; }
         .legend strong { color: #fff; }
         .column-header { position: sticky; top: 38px; z-index: 99; background: rgba(10,15,30,0.97); backdrop-filter: blur(8px); border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0 20px; }
@@ -208,6 +213,8 @@
 
         function renderLevel(level, funds) {
             const filtered = activeCategory === 'all' ? funds : funds.filter(f => f.categoria === activeCategory);
+            // Ordina per buy_count decrescente, poi per RSI decrescente
+            filtered.sort((a, b) => (b.buy_count || 0) - (a.buy_count || 0) || (b.rsi || 0) - (a.rsi || 0));
             const tbody = document.getElementById(`level${level}Body`);
             document.getElementById(`l${level}Count`).textContent = `${filtered.length} fondi`;
 
@@ -237,7 +244,7 @@
                     ${fmtPct(f.pct_1m)}
                     <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="buy-count">${f.buy_count || 0}/4</td>
+                    <td class="buy-count bc${f.buy_count || 0}">${f.buy_count || 0}/4</td>
                 </tr>`;
             }).join('');
         }
