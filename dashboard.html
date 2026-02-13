@@ -127,9 +127,11 @@
             3. Volatilit&agrave;: NAV &gt; Banda Bollinger superiore |
             4. Setup: NAV in salita per 2+ gg consecutivi
             <br>
-            <span style="color:#6ab7ff;">Azionari:</span> RSI 55-68, dist &lt;6%, BB &plusmn;2&sigma;, segnale MA &plusmn;2%
+            <span style="color:#6ab7ff;">AZ</span> Azionari: RSI 55-68, dist &lt;6%, BB &plusmn;2&sigma;
             &nbsp;|&nbsp;
-            <span style="color:#ffb347;">Obbligazionari:</span> RSI 48-58, dist &lt;1.5%, BB &plusmn;1.5&sigma;, segnale MA &plusmn;0.5%
+            <span style="color:#e8a0ff;">CRP</span> Corporate/Flessibili: RSI 52-63, dist &lt;3%, BB &plusmn;1.8&sigma;
+            &nbsp;|&nbsp;
+            <span style="color:#ffb347;">OBB</span> Gov/Breve Termine: RSI 48-58, dist &lt;1.5%, BB &plusmn;1.5&sigma;
         </div>
 
         <div class="category-filters" id="categoryFilters"></div>
@@ -216,7 +218,8 @@
 
             tbody.innerHTML = filtered.map(f => {
                 const rsiClass = f.rsi < 30 ? 'low' : f.rsi > 70 ? 'high' : 'mid';
-                const typeTag = f.asset_type === 'bond' ? '<span style="color:#ffb347;font-size:0.7em;" title="Obbligazionario - parametri calibrati">OBB</span>' : '';
+                const typeTag = f.asset_type === 'bond' ? '<span style="color:#ffb347;font-size:0.7em;" title="Obbligazionario Gov/BT">OBB</span>' :
+                    f.asset_type === 'bond_hy' ? '<span style="color:#e8a0ff;font-size:0.7em;" title="Corporate/Flessibile">CRP</span>' : '';
                 const secondCol = level === 3 ? f.categoria : f.casa;
                 const fmtPct = v => {
                     if (v == null) return '<td class="pct zero">-</td>';

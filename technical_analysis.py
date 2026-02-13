@@ -46,6 +46,20 @@ class TechnicalAnalyzer:
             'max_distance_from_ma': 1.5,
             'ma_signal_threshold': 0.5,  # % sopra/sotto MM per segnale BUY/SELL
         },
+        # Profilo intermedio per Corporate, High Yield, Flessibili, EM Bonds
+        'bond_hy': {
+            'ma_period': 20,
+            'rsi_period': 14,
+            'rsi_oversold': 33,
+            'rsi_overbought': 67,
+            'bollinger_period': 20,
+            'bollinger_std': 1.8,
+            'days_above_ma': 3,
+            'rsi_optimal_low': 52,
+            'rsi_optimal_high': 63,
+            'max_distance_from_ma': 3.0,
+            'ma_signal_threshold': 1.0,
+        },
     }
 
     @staticmethod
@@ -54,14 +68,28 @@ class TechnicalAnalyzer:
         Rileva il tipo di asset dalla categoria del fondo.
 
         Returns:
-            'bond' se obbligazionario, 'equity' altrimenti
+            'bond_hy' per Corporate/HY/Flessibili/EM bonds (volatilita' media)
+            'bond' per Governativi/Breve Termine/Inflation Linked (bassa volatilita')
+            'equity' per tutti gli azionari
         """
         if not categoria:
             return 'equity'
         cat_lower = categoria.lower()
-        if 'obblig' in cat_lower or 'bond' in cat_lower or 'fixed' in cat_lower or 'reddito' in cat_lower:
-            return 'bond'
-        return 'equity'
+
+        # Prima controlla se e' obbligazionario
+        is_bond = 'obblig' in cat_lower or 'bond' in cat_lower or 'fixed' in cat_lower or 'reddito' in cat_lower
+
+        if not is_bond:
+            return 'equity'
+
+        # Distingui bond ad alta volatilita' (profilo intermedio)
+        hy_keywords = ['corporate', 'high yield', 'flessibil', 'flexible', 'emerging',
+                       'credit', 'convertib', 'subordinat', 'total return']
+        if any(kw in cat_lower for kw in hy_keywords):
+            return 'bond_hy'
+
+        # Bond standard (governativi, breve termine, inflation linked)
+        return 'bond'
 
     def __init__(self, config: dict = None, asset_type: str = 'equity'):
         """
