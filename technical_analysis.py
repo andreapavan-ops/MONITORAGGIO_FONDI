@@ -238,21 +238,23 @@ class TechnicalAnalyzer:
                 break
         return count
 
-    def count_consecutive_rising(self, prices: pd.Series, max_days: int = 5) -> int:
+    def count_rising_days(self, prices: pd.Series, window: int = 5) -> int:
         """
-        Conta i giorni consecutivi in cui il NAV è in salita
+        Conta quanti degli ultimi N giorni il NAV e' salito (non consecutivi).
+        Piu' robusto dei giorni consecutivi: basta 1 giorno di pausa
+        per non azzerare il conteggio.
 
         Args:
             prices: Serie di prezzi
-            max_days: Massimo giorni da controllare
+            window: Finestra di giorni da controllare
 
         Returns:
-            Numero di giorni consecutivi in salita
+            Numero di giorni in salita su window
         """
         if len(prices) < 2:
             return 0
         count = 0
-        for i in range(1, min(max_days + 1, len(prices))):
+        for i in range(1, min(window + 1, len(prices))):
             if prices.iloc[-i] > prices.iloc[-i - 1]:
                 count += 1
             else:
@@ -305,8 +307,8 @@ class TechnicalAnalyzer:
         # Distanza % dal MM20
         distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
 
-        # Giorni consecutivi in salita
-        rising_days = self.count_consecutive_rising(prices)
+        # Giorni in salita su ultimi 5
+        rising_days = self.count_rising_days(prices, window=5)
 
         # === CONDIZIONI L1 PRO ===
         price_above_ma = current_price > ma_current if pd.notna(ma_current) else False
@@ -331,8 +333,8 @@ class TechnicalAnalyzer:
         else:
             nav_above_upper_bb = False
 
-        # Condizione 4: SETUP (NAV in salita per 2+ giorni)
-        nav_rising = rising_days >= 2
+        # Condizione 4: SETUP (NAV in salita 3+ degli ultimi 5 giorni)
+        nav_rising = rising_days >= 3
 
         conditions = {
             'price_above_ma': price_above_ma,
