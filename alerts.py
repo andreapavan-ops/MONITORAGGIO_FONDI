@@ -255,13 +255,14 @@ class AlertSystem:
                     </tr>
                 """
                 for f in funds[:10]:  # Max 10 fondi per livello nel report
-                    signal_color = '#00B050' if f['signal'] == 'BUY' else '#DC3545' if f['signal'] == 'SELL' else '#FFC000'
+                    sig = f.get('signal', f.get('final_signal', 'HOLD'))
+                    signal_color = '#00B050' if sig == 'BUY' else '#DC3545' if sig == 'SELL' else '#FFC000'
                     level_tables += f"""
                     <tr>
                         <td style="padding: 8px; border: 1px solid #ddd;">{f['nome'][:35]}...</td>
                         <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">{"€{:.2f}".format(f['price']) if f.get('price') else '-'}</td>
                         <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">{"{:.0f}".format(f['rsi']) if f.get('rsi') else '-'}</td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; background: {signal_color}; color: white;">{f.get('signal', 'HOLD')}</td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center; background: {signal_color}; color: white;">{sig}</td>
                     </tr>
                     """
                 level_tables += "</table>"

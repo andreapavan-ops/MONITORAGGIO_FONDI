@@ -404,10 +404,10 @@ class FundMonitor:
                 'buy_count': int(r['analysis'].get('buy_count', 0)),
                 'asset_type': r['analysis'].get('asset_type', 'equity'),
                 'conditions': {
-                    'trend_ok': bool(r['analysis'].get('conditions', {}).get('trend_ok', False)),
-                    'rsi_optimal': bool(r['analysis'].get('conditions', {}).get('rsi_optimal', False)),
-                    'nav_above_bb': bool(r['analysis'].get('conditions', {}).get('nav_above_upper_bb', False)),
-                    'nav_rising': bool(r['analysis'].get('conditions', {}).get('nav_rising', False)),
+                    'trend_ok': bool(r['analysis'].get('level_conditions', {}).get('trend_ok', False)),
+                    'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
+                    'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
+                    'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
                 }
             }
             dashboard_data['levels'][level].append(fund_data)
@@ -579,10 +579,10 @@ class FundMonitor:
                         'buy_count': int(r['analysis'].get('buy_count', 0)),
                         'asset_type': r['analysis'].get('asset_type', 'equity'),
                         'conditions': {
-                            'trend_ok': bool(r['analysis'].get('conditions', {}).get('trend_ok', False)),
-                            'rsi_optimal': bool(r['analysis'].get('conditions', {}).get('rsi_optimal', False)),
-                            'nav_above_bb': bool(r['analysis'].get('conditions', {}).get('nav_above_upper_bb', False)),
-                            'nav_rising': bool(r['analysis'].get('conditions', {}).get('nav_rising', False)),
+                            'trend_ok': bool(r['analysis'].get('level_conditions', {}).get('trend_ok', False)),
+                            'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
+                            'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
+                            'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
                         }
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)
