@@ -159,16 +159,28 @@ class FundDataFetcher:
                 if len(cells) >= 2:
                     try:
                         date_text = cells[0].get_text(strip=True)
-                        price_text = cells[1].get_text(strip=True)
+                        # FT usa Close (colonna 5) se disponibile, altrimenti Open (colonna 2)
+                        price_text = cells[4].get_text(strip=True) if len(cells) >= 5 else cells[1].get_text(strip=True)
 
-                        # Parsa la data (formato: "Friday, February 07, 2026" o simili)
+                        # Parsa la data - FT puo' avere formato doppio:
+                        # "Wednesday, February 18, 2026Wed, Feb 18, 2026"
                         date_clean = None
-                        for fmt in ['%A, %B %d, %Y', '%d/%m/%Y', '%Y-%m-%d', '%B %d, %Y']:
+                        # Prima prova regex per estrarre il primo formato
+                        m = re.match(r'\w+,\s+(\w+)\s+(\d+),\s+(\d{4})', date_text)
+                        if m:
+                            month_name, day, year = m.groups()
                             try:
-                                date_clean = datetime.strptime(date_text, fmt).strftime('%Y-%m-%d')
-                                break
+                                date_clean = datetime.strptime(f"{month_name} {day}, {year}", "%B %d, %Y").strftime('%Y-%m-%d')
                             except ValueError:
-                                continue
+                                pass
+
+                        if not date_clean:
+                            for fmt in ['%A, %B %d, %Y', '%d/%m/%Y', '%Y-%m-%d', '%B %d, %Y']:
+                                try:
+                                    date_clean = datetime.strptime(date_text, fmt).strftime('%Y-%m-%d')
+                                    break
+                                except ValueError:
+                                    continue
 
                         if not date_clean:
                             continue
