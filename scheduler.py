@@ -38,18 +38,29 @@ def _has_run_today():
 
 
 def run_monitor():
-    """Esegue il monitoraggio (con lock condiviso per evitare esecuzioni parallele)"""
+    """Esegue il monitoraggio (con lock condiviso per evitare esecuzioni parallele)
+    Include timeout di 10 minuti per evitare blocchi permanenti."""
     if not monitor_lock.try_acquire():
         print(f"⚠️ Scheduler: monitoraggio gia' in esecuzione, skip")
         return
 
-    try:
-        print(f"\n⏰ Scheduler: avvio monitoraggio programmato - {datetime.now()}")
-        monitor = FundMonitor()
-        monitor.run(send_daily_report=True)
-    except Exception as e:
-        print(f"❌ Errore durante monitoraggio: {e}")
-    finally:
+    def _do_monitor():
+        try:
+            print(f"\n⏰ Scheduler: avvio monitoraggio programmato - {datetime.now()}")
+            monitor = FundMonitor()
+            monitor.run(send_daily_report=True)
+        except Exception as e:
+            print(f"❌ Errore durante monitoraggio: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            monitor_lock.release()
+
+    t = threading.Thread(target=_do_monitor, daemon=True)
+    t.start()
+    t.join(timeout=600)  # Max 10 minuti
+    if t.is_alive():
+        print(f"⚠️ Scheduler: monitoraggio ancora in corso dopo 10 min, rilascio lock")
         monitor_lock.release()
 
 
@@ -121,12 +132,20 @@ def run_scheduler():
 
     print(f"🔄 Fallback attivo: controllo ogni 30 minuti")
 
-    # Loop infinito
+    # Loop infinito con heartbeat
+    loop_count = 0
     while True:
         try:
             schedule.run_pending()
+            loop_count += 1
+            # Log heartbeat ogni 60 minuti per confermare che lo scheduler e' vivo
+            if loop_count % 60 == 0:
+                print(f"💓 Scheduler heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M')} - "
+                      f"prossimo job: {schedule.next_run()}")
         except Exception as e:
             print(f"⚠️ Scheduler errore nel loop: {e}")
+            import traceback
+            traceback.print_exc()
         time.sleep(60)  # Check ogni minuto
 
 

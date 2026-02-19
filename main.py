@@ -60,23 +60,36 @@ def main():
     print(f"🌐 Dashboard disponibile su http://localhost:{port}")
     print("="*60 + "\n")
 
-    # Avvia monitoraggio iniziale e scheduler in background DOPO il server
+    # Avvia scheduler SUBITO in background (prima del monitoraggio iniziale)
+    # Cosi' anche se il monitoraggio iniziale si blocca, lo scheduler gira
     def startup_background():
-        """Esegue monitoraggio iniziale e avvia scheduler in background"""
+        """Avvia scheduler e poi esegue monitoraggio iniziale"""
         import time
         time.sleep(5)  # Aspetta che Flask sia pronto
 
-        # Monitoraggio iniziale
-        if os.environ.get('RUN_ON_START', 'true').lower() == 'true':
-            print("\n▶ Esecuzione monitoraggio iniziale (background)...")
-            try:
-                run_monitor()
-            except Exception as e:
-                print(f"⚠️ Errore monitoraggio iniziale: {e}")
-
-        # Avvia scheduler
+        # 1. Avvia scheduler PRIMA di tutto (non deve mai mancare)
         print("\n▶ Avvio scheduler...")
         start_scheduler_thread()
+        print("✅ Scheduler avviato con successo")
+
+        # 2. Monitoraggio iniziale (con timeout di sicurezza)
+        if os.environ.get('RUN_ON_START', 'true').lower() == 'true':
+            print("\n▶ Esecuzione monitoraggio iniziale (background)...")
+            monitor_thread = threading.Thread(target=_run_monitor_safe, daemon=True)
+            monitor_thread.start()
+            # Aspetta max 5 minuti, poi prosegui comunque
+            monitor_thread.join(timeout=300)
+            if monitor_thread.is_alive():
+                print("⚠️ Monitoraggio iniziale ancora in corso dopo 5 min, proseguo...")
+
+    def _run_monitor_safe():
+        """Esegue run_monitor con gestione errori robusta"""
+        try:
+            run_monitor()
+        except Exception as e:
+            print(f"⚠️ Errore monitoraggio iniziale: {e}")
+            import traceback
+            traceback.print_exc()
 
     bg_thread = threading.Thread(target=startup_background, daemon=True)
     bg_thread.start()

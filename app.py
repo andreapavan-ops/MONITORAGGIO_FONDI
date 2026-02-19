@@ -272,6 +272,12 @@ def health_check():
     except Exception:
         pass
 
+    # 3.5 AUTO-RECOVERY: se dati stale e monitoraggio non in corso, lancialo
+    auto_recovery_triggered = False
+    if stale and _should_run_today() and not monitor_lock.is_running():
+        print(f"🔄 HEALTH AUTO-RECOVERY: dati vecchi di {hours_since_update}h, lancio monitoraggio...")
+        auto_recovery_triggered = _trigger_auto_monitor()
+
     # 4. Calcola stato globale
     funds_ok = health.get('funds_ok', 0)
     funds_error = health.get('funds_error', 0)
@@ -315,6 +321,7 @@ def health_check():
             'no_price': health.get('funds_no_price', 0),
             'error_details': health.get('errors', [])
         },
+        'auto_recovery_triggered': auto_recovery_triggered,
         'checked_at': now.isoformat()
     })
 
