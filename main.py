@@ -10,6 +10,13 @@ import os
 import threading
 from datetime import datetime
 
+# Carica variabili da .env (in locale) - in produzione Railway le inietta direttamente
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Imposta variabili ambiente di default
 os.environ.setdefault('MONITOR_HOUR', '18')
 os.environ.setdefault('MONITOR_MINUTE', '0')

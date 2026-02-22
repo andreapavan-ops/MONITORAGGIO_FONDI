@@ -90,14 +90,29 @@ class FundMonitor:
     def load_funds(self) -> pd.DataFrame:
         """
         Carica lista fondi dal file Excel
-        
+
         Returns:
-            DataFrame con tutti i fondi
+            DataFrame con tutti i fondi (ISIN validi, senza duplicati)
         """
         try:
             df = pd.read_excel(self.excel_path, sheet_name='Fondi')
-            print(f"📂 Caricati {len(df)} fondi dal file Excel")
-            return df
+            total_raw = len(df)
+
+            # Rimuovi righe senza ISIN
+            no_isin = df['ISIN'].isna()
+            if no_isin.any():
+                add_log(f"  ATTENZIONE: {no_isin.sum()} fondi senza ISIN ignorati: {df.loc[no_isin, 'Nome Fondo'].tolist()}")
+                df = df[~no_isin]
+
+            # Rimuovi ISIN duplicati (tieni prima occorrenza, logga i rimossi)
+            dup_mask = df.duplicated('ISIN', keep='first')
+            if dup_mask.any():
+                dup_isins = df.loc[dup_mask, 'ISIN'].tolist()
+                add_log(f"  ATTENZIONE: {dup_mask.sum()} righe duplicate rimosse (ISIN ripetuti): {dup_isins}")
+                df = df[~dup_mask]
+
+            add_log(f"📂 Caricati {len(df)} fondi validi (su {total_raw} righe nel file Excel)")
+            return df.reset_index(drop=True)
         except Exception as e:
             print(f"❌ Errore caricamento fondi: {e}")
             return pd.DataFrame()
