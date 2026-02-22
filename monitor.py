@@ -21,6 +21,13 @@ import time
 from decimal import Decimal
 from pathlib import Path
 
+# Carica variabili .env se presenti (utile quando monitor.py viene eseguito direttamente)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Import moduli locali
 from data_fetcher import FundDataFetcher
 from technical_analysis import TechnicalAnalyzer
