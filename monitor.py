@@ -389,7 +389,9 @@ class FundMonitor:
         
         for r in results:
             signal = r['analysis'].get('final_signal', 'HOLD')
-            level = r['livello']
+            # Usa il livello aggiornato (suggested_level) se è cambiato,
+            # così i fondi promossi/declassati appaiono nel bucket corretto
+            level = r['analysis'].get('suggested_level', r['livello'])
             category = r['categoria']
             
             # Conteggio segnali
@@ -593,26 +595,28 @@ class FundMonitor:
 
         sign_a  = '✅' if nav_rising_orig else '❌'
         sign_b  = '✅' if nav_rising_alt  else '❌'
-        sub_a   = f"{sign_a} A: {rising_days} gg consecutivi in salita (soglia ≥3)"
         pct_str = f"{pct_vs_5d:+.2f}%" if pct_vs_5d != 0.0 else "N/D"
-        sub_b   = f"{sign_b} B: Prezzo vs 5gg fa {pct_str} (soglia >0%)"
+        # Formato HTML: ogni criterio su riga separata
+        sub_a   = f"{sign_a} <b>A</b>: {rising_days} gg consecutivi in salita (soglia ≥3)"
+        sub_b   = f"{sign_b} <b>B</b>: Prezzo vs 5gg fa {pct_str} (soglia >0%)"
+        both    = f"{sub_a}<br>{sub_b}"
 
         if setup_ok:
             which = "A" if nav_rising_orig else "B"
             conditions.append({
                 'name': 'SETUP (NAV)', 'ok': True,
-                'detail': f"Criterio {which} passato — {sub_a} | {sub_b}",
+                'detail': f"Criterio <b>{which}</b> passato<br>{sub_a}<br>{sub_b}",
                 'gap_text': None, 'forecast': None
             })
         else:
             needed  = max(0, 3 - rising_days)
-            fc_a    = f"Crit. A: mancano {needed} gg positivi consecutivi"
-            fc_b    = (f"Crit. B: prezzo deve crescere {abs(pct_vs_5d):.2f}% rispetto a 5gg fa"
-                       if pct_vs_5d <= 0 else f"Crit. B: prezzo già +{pct_vs_5d:.2f}% su 5gg (in recupero)")
+            fc_a    = f"<b>A</b>: mancano {needed} gg positivi consecutivi"
+            fc_b    = (f"<b>B</b>: prezzo deve crescere {abs(pct_vs_5d):.2f}% rispetto a 5gg fa"
+                       if pct_vs_5d <= 0 else f"<b>B</b>: prezzo già +{pct_vs_5d:.2f}% su 5gg (in recupero)")
             conditions.append({
                 'name': 'SETUP (NAV)', 'ok': False,
                 'detail': None,
-                'gap_text': f"{sub_a} | {sub_b}",
+                'gap_text': both,
                 'forecast': f"{fc_a}. {fc_b}"
             })
 
