@@ -424,7 +424,7 @@ class AlertSystem:
         n_near = len(near_l1_funds)
 
         if n_promoted > 0:
-            subject = f"⬆️ {n_promoted} Promoss{'i' if n_promoted > 1 else 'o'} L1 + Top {n_near} L2 — {today}"
+            subject = f"⬆️ {n_promoted} Fondo{'i' if n_promoted > 1 else ''} a L1 (4/4 TRBS) + Top {n_near} L2 — {today}"
         else:
             subject = f"📊 Top {n_near} Fondi L2 Vicini a L1 — {today}"
 
@@ -445,7 +445,7 @@ class AlertSystem:
                   <td style="padding:8px;border:1px solid #ddd;">
                     <strong>{f['nome'][:45]}</strong><br>
                     <span style="font-size:11px;color:#666;">{f['casa']} · {f['categoria'][:35]}</span><br>
-                    <span style="font-size:11px;color:#888;">L{lvl_from} → L1 · {f['isin']}</span>
+                    <span style="font-size:11px;color:#888;">{'✅ Confermato L1' if lvl_from == 1 else f'L{lvl_from} → L1'} · {f['isin']}</span>
                   </td>
                   <td style="padding:8px;border:1px solid #ddd;text-align:center;">{"€{:.4f}".format(price) if price else '–'}</td>
                   <td style="padding:8px;border:1px solid #ddd;text-align:center;">{"€{:.4f}".format(ma) if ma else '–'}</td>
@@ -461,7 +461,7 @@ class AlertSystem:
             promo_section = f"""
             <div style="margin-bottom:30px;">
               <h2 style="color:#00B050;border-bottom:3px solid #00B050;padding-bottom:8px;margin-top:0;">
-                ⬆️ Fondi Promossi a Livello 1
+                ⬆️ Fondi a Livello 1 — 4/4 TRBS
                 <span style="font-size:13px;font-weight:normal;color:#666;"> — {n_promoted} fondo{'i' if n_promoted > 1 else ''}</span>
               </h2>
               <p style="color:#555;margin-top:0;">

@@ -658,19 +658,15 @@ class FundMonitor:
                 'analysis': r['analysis'],
             }
 
-            # SELL su L1: urgente, email individuale
+            # SELL su L1: urgente, email individuale (solo L1)
             if level == 1 and signal == 'SELL':
                 add_log(f"  🔴 Alert SELL L1: {r['nome'][:40]}")
                 self.alert_system.send_sell_alert(fund_info, r['analysis'])
 
-            # SELL su L2: email individuale
-            elif level == 2 and signal == 'SELL':
-                add_log(f"  🔴 Alert SELL L2: {r['nome'][:40]}")
-                self.alert_system.send_sell_alert(fund_info, r['analysis'])
-
-            # Promozione a L1 (da qualsiasi livello): raccogli per digest
-            elif suggested == 1 and level != 1:
-                add_log(f"  ⬆️ Promozione L{level}→L1 (digest): {r['nome'][:40]}")
+            # BUY: fondo con tutte 4 condizioni ok (già a L1 o appena promosso)
+            elif suggested == 1:
+                label = f"L{level}→L1" if level != 1 else "L1 confermato"
+                add_log(f"  ⬆️ BUY {label} (digest): {r['nome'][:40]}")
                 promoted_to_l1.append(fund_info)
 
             # Fondi L2 non promossi: candidati top 3 per analisi gap
