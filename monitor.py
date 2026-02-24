@@ -465,50 +465,225 @@ class FundMonitor:
 
         return dashboard_data
     
+    def _compute_gap_analysis(self, result: dict) -> dict:
+        """
+        Calcola l'analisi quantitativa del gap tra un fondo L2 e i criteri L1 Pro.
+
+        Per ciascuna delle 4 condizioni L1 Pro restituisce:
+        - se è soddisfatta e il dettaglio
+        - se non è soddisfatta: il gap numerico e la previsione
+
+        Returns:
+            Dizionario con buy_count, conditions (lista), e valori tecnici chiave
+        """
+        analysis = result['analysis']
+        asset_type = analysis.get('asset_type', 'equity')
+        profile = TechnicalAnalyzer.PROFILES.get(asset_type, TechnicalAnalyzer.PROFILES['equity'])
+
+        lc = analysis.get('level_conditions', {})
+        conditions = []
+
+        # --- Condizione 1: TREND ---
+        trend_ok = lc.get('trend_ok', False)
+        days_above = lc.get('days_above_ma', 0)
+        slope = float(lc.get('ma_slope', 0) or 0)
+        distance = float(lc.get('distance_from_ma', 0) or 0)
+        max_dist = profile['max_distance_from_ma']
+
+        if trend_ok:
+            conditions.append({
+                'name': 'TREND', 'ok': True,
+                'detail': f"Prezzo sopra MM da {days_above}gg, slope +{slope:.2f}%, distanza {distance:.1f}%",
+                'gap_text': None, 'forecast': None
+            })
+        else:
+            gaps, forecasts = [], []
+            if not lc.get('price_above_ma_3days'):
+                dn = max(0, 3 - days_above)
+                gaps.append(f"Sopra MM da {days_above}/3 giorni richiesti")
+                forecasts.append(f"Mancano {dn} seduta{'e' if dn != 1 else 'a'} consecutive sopra MM")
+            if not lc.get('slope_positive'):
+                gaps.append(f"Pendenza MM: {slope:.3f}% (serve > 0)")
+                forecasts.append("1–2 giorni di prezzi crescenti possono invertire la pendenza MM")
+            if not lc.get('distance_ok'):
+                overshoot = distance - max_dist
+                gaps.append(f"Distanza MM: {distance:.1f}% (max {max_dist:.1f}%, eccesso {overshoot:.1f}%)")
+                forecasts.append(f"Il fondo ha corso troppo veloce: serve consolidamento di ~{overshoot:.1f}% o che la MM recuperi")
+            conditions.append({
+                'name': 'TREND', 'ok': False,
+                'detail': None,
+                'gap_text': ' · '.join(gaps) if gaps else 'Condizione non soddisfatta',
+                'forecast': ' · '.join(forecasts) if forecasts else None
+            })
+
+        # --- Condizione 2: MOMENTUM (RSI) ---
+        rsi_val = float(lc.get('rsi') or analysis.get('rsi') or 50)
+        rsi_low = profile['rsi_optimal_low']
+        rsi_high = profile['rsi_optimal_high']
+        rsi_ok = lc.get('rsi_optimal', False)
+
+        if rsi_ok:
+            conditions.append({
+                'name': 'MOMENTUM (RSI)', 'ok': True,
+                'detail': f"RSI {rsi_val:.0f} nel range ottimale [{rsi_low}–{rsi_high}]",
+                'gap_text': None, 'forecast': None
+            })
+        elif rsi_val < rsi_low:
+            gap = rsi_low - rsi_val
+            conditions.append({
+                'name': 'MOMENTUM (RSI)', 'ok': False,
+                'detail': None,
+                'gap_text': f"RSI {rsi_val:.0f} sotto soglia {rsi_low} (mancano {gap:.0f} punti)",
+                'forecast': f"Con {'2–3' if gap < 5 else '3–5'} sessioni positive, RSI può raggiungere la zona [{rsi_low}–{rsi_high}]"
+            })
+        else:
+            gap = rsi_val - rsi_high
+            conditions.append({
+                'name': 'MOMENTUM (RSI)', 'ok': False,
+                'detail': None,
+                'gap_text': f"RSI {rsi_val:.0f} sopra soglia {rsi_high} (+{gap:.0f} punti, ipercomprato)",
+                'forecast': "Probabile fase di consolidamento/correzione prima del rientro nel range ottimale"
+            })
+
+        # --- Condizione 3: VOLATILITÀ (Bande di Bollinger) ---
+        bb_ok = lc.get('nav_above_upper_bb', False)
+        price = float(analysis.get('current_price') or 0)
+        bb = analysis.get('bollinger') or {}
+        ma_val = float(analysis.get('ma') or 0)
+        bb_upper = float(bb.get('upper') or 0)
+
+        if bb_ok:
+            conditions.append({
+                'name': 'VOLATILITÀ (BB)', 'ok': True,
+                'detail': "Prezzo nella metà superiore delle Bande di Bollinger",
+                'gap_text': None, 'forecast': None
+            })
+        elif price and ma_val and bb_upper:
+            if asset_type == 'equity':
+                midpoint = (ma_val + bb_upper) / 2
+                gap_pct = (midpoint - price) / price * 100
+                conditions.append({
+                    'name': 'VOLATILITÀ (BB)', 'ok': False,
+                    'detail': None,
+                    'gap_text': f"Prezzo {price:.4f} sotto midpoint BB {midpoint:.4f} (gap: {gap_pct:.1f}%)",
+                    'forecast': f"Serve +{gap_pct:.1f}% per entrare nella zona superiore BB: momentum ancora parzialmente sviluppato"
+                })
+            else:
+                gap_pct = (ma_val - price) / price * 100 if price else 0
+                conditions.append({
+                    'name': 'VOLATILITÀ (BB)', 'ok': False,
+                    'detail': None,
+                    'gap_text': f"Prezzo {price:.4f} sotto MM {ma_val:.4f} (gap: {gap_pct:.1f}%)",
+                    'forecast': f"Il NAV deve superare la MM ({ma_val:.4f}): manca un +{gap_pct:.1f}%"
+                })
+        else:
+            conditions.append({
+                'name': 'VOLATILITÀ (BB)', 'ok': False,
+                'detail': None,
+                'gap_text': "Dati Bollinger non disponibili (storico insufficiente)",
+                'forecast': "Attendere accumulo di 20 giorni di storico per il calcolo delle BB"
+            })
+
+        # --- Condizione 4: SETUP (NAV in salita) — doppio criterio ---
+        rising_days       = lc.get('rising_days', 0)
+        nav_rising_orig   = lc.get('nav_rising_original', lc.get('nav_rising', False))
+        nav_rising_alt    = lc.get('nav_rising_alt', False)
+        pct_vs_5d         = lc.get('pct_vs_5d', 0.0)
+        setup_ok          = lc.get('nav_rising', False)  # OR combinato
+
+        sign_a  = '✅' if nav_rising_orig else '❌'
+        sign_b  = '✅' if nav_rising_alt  else '❌'
+        sub_a   = f"{sign_a} A: {rising_days} gg consecutivi in salita (soglia ≥3)"
+        pct_str = f"{pct_vs_5d:+.2f}%" if pct_vs_5d != 0.0 else "N/D"
+        sub_b   = f"{sign_b} B: Prezzo vs 5gg fa {pct_str} (soglia >0%)"
+
+        if setup_ok:
+            which = "A" if nav_rising_orig else "B"
+            conditions.append({
+                'name': 'SETUP (NAV)', 'ok': True,
+                'detail': f"Criterio {which} passato — {sub_a} | {sub_b}",
+                'gap_text': None, 'forecast': None
+            })
+        else:
+            needed  = max(0, 3 - rising_days)
+            fc_a    = f"Crit. A: mancano {needed} gg positivi consecutivi"
+            fc_b    = (f"Crit. B: prezzo deve crescere {abs(pct_vs_5d):.2f}% rispetto a 5gg fa"
+                       if pct_vs_5d <= 0 else f"Crit. B: prezzo già +{pct_vs_5d:.2f}% su 5gg (in recupero)")
+            conditions.append({
+                'name': 'SETUP (NAV)', 'ok': False,
+                'detail': None,
+                'gap_text': f"{sub_a} | {sub_b}",
+                'forecast': f"{fc_a}. {fc_b}"
+            })
+
+        return {
+            'buy_count': int(analysis.get('buy_count', 0)),
+            'conditions': conditions,
+            'price': price,
+            'ma': ma_val,
+            'rsi': rsi_val,
+            'pct_1d': analysis.get('pct_change_1d'),
+            'pct_1w': analysis.get('pct_change_1w'),
+            'pct_1m': analysis.get('pct_change_1m'),
+            'asset_type': asset_type,
+        }
+
     def send_alerts(self, results: list):
         """
-        Invia alert per segnali significativi
-        
-        Args:
-            results: Lista risultati analisi
+        Invia alert per segnali significativi.
+
+        - SELL su L1/L2: email individuale urgente
+        - BUY: unica email digest giornaliera con:
+            * Fondi promossi a L1 (tutte 4 condizioni soddisfatte)
+            * Top 3 fondi L2 più vicini a L1 con analisi gap e previsione
         """
-        min_indicators_l3 = int(self.config.get('Min Indicatori Concordi L3', 2))
-        
+        promoted_to_l1 = []   # Fondi (qualsiasi livello) con suggested_level == 1
+        near_l1 = []          # Fondi L2 non ancora a L1, candidati top 3
+
         for r in results:
             signal = r['analysis'].get('final_signal', 'HOLD')
-            strength = r['analysis'].get('signal_strength', 0)
             level = r['livello']
-            
+            suggested = r['analysis'].get('suggested_level', level)
+
             fund_info = {
                 'isin': r['isin'],
                 'nome': r['nome'],
                 'casa': r['casa'],
                 'categoria': r['categoria'],
-                'livello': level
+                'livello': level,
+                'analysis': r['analysis'],
             }
-            
-            # Livello 1: Alert sempre su SELL
+
+            # SELL su L1: urgente, email individuale
             if level == 1 and signal == 'SELL':
-                print(f"  🔴 Alert SELL per L1: {r['nome'][:40]}")
+                add_log(f"  🔴 Alert SELL L1: {r['nome'][:40]}")
                 self.alert_system.send_sell_alert(fund_info, r['analysis'])
-            
-            # Livello 2: Alert su BUY forte o SELL
+
+            # SELL su L2: email individuale
+            elif level == 2 and signal == 'SELL':
+                add_log(f"  🔴 Alert SELL L2: {r['nome'][:40]}")
+                self.alert_system.send_sell_alert(fund_info, r['analysis'])
+
+            # Promozione a L1 (da qualsiasi livello): raccogli per digest
+            elif suggested == 1 and level != 1:
+                add_log(f"  ⬆️ Promozione L{level}→L1 (digest): {r['nome'][:40]}")
+                promoted_to_l1.append(fund_info)
+
+            # Fondi L2 non promossi: candidati top 3 per analisi gap
             elif level == 2:
-                if signal == 'BUY' and strength >= 2:
-                    print(f"  🟢 Alert BUY per L2: {r['nome'][:40]}")
-                    self.alert_system.send_buy_alert(fund_info, r['analysis'])
-                elif signal == 'SELL':
-                    print(f"  🔴 Alert SELL per L2: {r['nome'][:40]}")
-                    self.alert_system.send_sell_alert(fund_info, r['analysis'])
-            
-            # Livello 3: Alert solo se indicatori concordi >= soglia
-            elif level == 3 and strength >= min_indicators_l3:
-                if signal == 'BUY':
-                    print(f"  🟢 Alert BUY per L3: {r['nome'][:40]}")
-                    self.alert_system.send_buy_alert(fund_info, r['analysis'])
-                elif signal == 'SELL':
-                    print(f"  🔴 Alert SELL per L3: {r['nome'][:40]}")
-                    self.alert_system.send_sell_alert(fund_info, r['analysis'])
+                gap_info = self._compute_gap_analysis(r)
+                near_l1.append({**fund_info, 'gap_info': gap_info})
+
+        # Ordina L2 per buy_count decrescente, prendi top 3
+        near_l1_sorted = sorted(near_l1, key=lambda x: x['gap_info'].get('buy_count', 0), reverse=True)
+        top3 = near_l1_sorted[:3]
+
+        # Invia unica digest BUY
+        if promoted_to_l1 or near_l1:
+            add_log(f"  📧 Invio digest BUY: {len(promoted_to_l1)} promossi a L1, {len(top3)} top L2")
+            self.alert_system.send_buy_digest(promoted_to_l1, top3)
+        else:
+            add_log("  ℹ️ Nessun fondo L2 da reportare — digest BUY non inviato")
     
     def run(self, send_daily_report: bool = True):
         """

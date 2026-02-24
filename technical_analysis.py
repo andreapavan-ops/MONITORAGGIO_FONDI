@@ -333,8 +333,20 @@ class TechnicalAnalyzer:
         else:
             nav_above_upper_bb = False
 
-        # Condizione 4: SETUP (NAV in salita 3+ degli ultimi 5 giorni)
-        nav_rising = rising_days >= 3
+        # Condizione 4a: SETUP-A (NAV in salita 3+ giorni consecutivi)
+        nav_rising_original = rising_days >= 3
+
+        # Condizione 4b: SETUP-B (prezzo oggi > prezzo 5 giorni fa — direzione netta)
+        if len(prices) >= 6:
+            price_5d_ago = prices.iloc[-6]
+            nav_rising_alt = float(current_price) > float(price_5d_ago)
+            pct_vs_5d = ((float(current_price) - float(price_5d_ago)) / float(price_5d_ago) * 100) if float(price_5d_ago) != 0 else 0.0
+        else:
+            nav_rising_alt = False
+            pct_vs_5d = 0.0
+
+        # Combinata: L1 se passa almeno una delle due
+        nav_rising = nav_rising_original or nav_rising_alt
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -349,7 +361,10 @@ class TechnicalAnalyzer:
             'bb_upper': round(bb_upper, 4) if bb_upper else None,
             'nav_above_upper_bb': nav_above_upper_bb,
             'rising_days': rising_days,
-            'nav_rising': nav_rising,
+            'nav_rising_original': nav_rising_original,
+            'nav_rising_alt': nav_rising_alt,
+            'pct_vs_5d': round(pct_vs_5d, 2),
+            'nav_rising': nav_rising,  # OR combinato (usato per buy_count)
             # Le 4 condizioni aggregate per buy_count
             'trend_ok': trend_ok,
         }

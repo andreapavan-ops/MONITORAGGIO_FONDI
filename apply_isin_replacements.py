@@ -34,8 +34,11 @@ def main():
     no_replacement = data['no_replacement']
     stats = data['stats']
 
-    print(f"📋 Sostituti trovati: {stats['found']}/{stats['total_broken']}")
-    print(f"❌ Senza sostituto:   {stats['not_found']}/{stats['total_broken']}")
+    total = stats.get('total_broken', stats.get('total_wrong', '?'))
+    found = stats.get('found', stats.get('fixed', len(replacements)))
+    not_found = stats.get('not_found', stats.get('no_replacement', len(no_replacement)))
+    print(f"📋 Sostituti trovati: {found}/{total}")
+    print(f"❌ Senza sostituto:   {not_found}/{total}")
     print()
 
     # Backup Excel

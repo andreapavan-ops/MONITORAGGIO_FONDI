@@ -409,6 +409,268 @@ class AlertSystem:
 
         return self._send_email(subject, body_html)
 
+    def send_buy_digest(self, promoted_funds: list, near_l1_funds: list) -> bool:
+        """
+        Invia unica email digest giornaliera BUY con:
+        - Sezione 1: Fondi promossi a Livello 1 (tutte 4 condizioni L1 Pro soddisfatte)
+        - Sezione 2: Top 3 fondi L2 più vicini a L1 con analisi gap quantitativa e previsione
+
+        Args:
+            promoted_funds: Fondi con suggested_level==1, con 'analysis' embedded
+            near_l1_funds:  Top 3 fondi L2 non promossi, con 'gap_info' embedded
+        """
+        today = datetime.now().strftime('%d/%m/%Y')
+        n_promoted = len(promoted_funds)
+        n_near = len(near_l1_funds)
+
+        if n_promoted > 0:
+            subject = f"⬆️ {n_promoted} Promoss{'i' if n_promoted > 1 else 'o'} L1 + Top {n_near} L2 — {today}"
+        else:
+            subject = f"📊 Top {n_near} Fondi L2 Vicini a L1 — {today}"
+
+        # ── Sezione 1: Fondi promossi a L1 ──────────────────────────────────
+        if promoted_funds:
+            promo_rows = ""
+            for f in promoted_funds:
+                a = f.get('analysis', {})
+                price = a.get('current_price')
+                ma    = a.get('ma')
+                rsi   = a.get('rsi')
+                p1d   = a.get('pct_change_1d')
+                p1w   = a.get('pct_change_1w')
+                lc    = a.get('level_conditions', {})
+                lvl_from = f.get('livello', '?')
+                promo_rows += f"""
+                <tr>
+                  <td style="padding:8px;border:1px solid #ddd;">
+                    <strong>{f['nome'][:45]}</strong><br>
+                    <span style="font-size:11px;color:#666;">{f['casa']} · {f['categoria'][:35]}</span><br>
+                    <span style="font-size:11px;color:#888;">L{lvl_from} → L1 · {f['isin']}</span>
+                  </td>
+                  <td style="padding:8px;border:1px solid #ddd;text-align:center;">{"€{:.4f}".format(price) if price else '–'}</td>
+                  <td style="padding:8px;border:1px solid #ddd;text-align:center;">{"€{:.4f}".format(ma) if ma else '–'}</td>
+                  <td style="padding:8px;border:1px solid #ddd;text-align:center;">{"{:.0f}".format(rsi) if rsi else '–'}</td>
+                  <td style="padding:8px;border:1px solid #ddd;text-align:center;{'color:#00B050;font-weight:bold;' if p1d and p1d > 0 else 'color:#DC3545;font-weight:bold;' if p1d and p1d < 0 else ''}">
+                    {"{:+.2f}%".format(p1d) if p1d is not None else '–'}
+                  </td>
+                  <td style="padding:8px;border:1px solid #ddd;text-align:center;{'color:#00B050;font-weight:bold;' if p1w and p1w > 0 else 'color:#DC3545;font-weight:bold;' if p1w and p1w < 0 else ''}">
+                    {"{:+.2f}%".format(p1w) if p1w is not None else '–'}
+                  </td>
+                </tr>"""
+
+            promo_section = f"""
+            <div style="margin-bottom:30px;">
+              <h2 style="color:#00B050;border-bottom:3px solid #00B050;padding-bottom:8px;margin-top:0;">
+                ⬆️ Fondi Promossi a Livello 1
+                <span style="font-size:13px;font-weight:normal;color:#666;"> — {n_promoted} fondo{'i' if n_promoted > 1 else ''}</span>
+              </h2>
+              <p style="color:#555;margin-top:0;">
+                Questi fondi soddisfano <strong>tutte e 4</strong> le condizioni L1 Pro
+                (Trend · Momentum · Volatilità · Setup).
+              </p>
+              <table style="width:100%;border-collapse:collapse;background:white;font-size:13px;">
+                <thead>
+                  <tr style="background:#00B050;color:white;">
+                    <th style="padding:8px;border:1px solid #ddd;text-align:left;">Fondo</th>
+                    <th style="padding:8px;border:1px solid #ddd;">Prezzo</th>
+                    <th style="padding:8px;border:1px solid #ddd;">MM20</th>
+                    <th style="padding:8px;border:1px solid #ddd;">RSI</th>
+                    <th style="padding:8px;border:1px solid #ddd;">1g %</th>
+                    <th style="padding:8px;border:1px solid #ddd;">1s %</th>
+                  </tr>
+                </thead>
+                <tbody>{promo_rows}</tbody>
+              </table>
+            </div>"""
+        else:
+            promo_section = """
+            <div style="margin-bottom:30px;">
+              <h2 style="color:#00B050;border-bottom:3px solid #00B050;padding-bottom:8px;margin-top:0;">
+                ⬆️ Fondi Promossi a Livello 1
+              </h2>
+              <p style="color:#999;font-style:italic;">
+                Nessun fondo ha raggiunto tutte e 4 le condizioni L1 Pro oggi.
+              </p>
+            </div>"""
+
+        # ── Sezione 2: Top 3 L2 vicini a L1 ────────────────────────────────
+        near_cards = ""
+        for rank, f in enumerate(near_l1_funds, start=1):
+            gi         = f.get('gap_info', {})
+            buy_count  = gi.get('buy_count', 0)
+            price      = gi.get('price', 0)
+            ma_val     = gi.get('ma', 0)
+            rsi_val    = gi.get('rsi', 0)
+            pct_1d     = gi.get('pct_1d')
+            pct_1w     = gi.get('pct_1w')
+            pct_1m     = gi.get('pct_1m')
+            conditions = gi.get('conditions', [])
+
+            bar_pct   = int(buy_count / 4 * 100)
+            bar_color = '#00B050' if bar_pct >= 75 else '#FFC000' if bar_pct >= 50 else '#FF6600'
+
+            def pct_style(v):
+                if v is None: return ''
+                return 'color:#00B050;font-weight:bold;' if v > 0 else 'color:#DC3545;font-weight:bold;'
+
+            def fmt_pct(v):
+                return "{:+.2f}%".format(v) if v is not None else '–'
+
+            # Righe condizioni
+            cond_rows     = ""
+            forecast_items = ""
+            for cond in conditions:
+                ok     = cond.get('ok', False)
+                name   = cond.get('name', '')
+                if ok:
+                    detail = cond.get('detail', '')
+                    cond_rows += f"""
+                    <tr>
+                      <td style="padding:6px 10px;border:1px solid #eee;text-align:center;font-size:14px;">✅</td>
+                      <td style="padding:6px 10px;border:1px solid #eee;font-weight:bold;color:#2d7a2d;font-size:12px;">{name}</td>
+                      <td style="padding:6px 10px;border:1px solid #eee;color:#2d7a2d;font-size:12px;">{detail}</td>
+                    </tr>"""
+                else:
+                    gap_text = cond.get('gap_text', '')
+                    forecast = cond.get('forecast', '')
+                    cond_rows += f"""
+                    <tr>
+                      <td style="padding:6px 10px;border:1px solid #eee;text-align:center;font-size:14px;">❌</td>
+                      <td style="padding:6px 10px;border:1px solid #eee;font-weight:bold;color:#DC3545;font-size:12px;">{name}</td>
+                      <td style="padding:6px 10px;border:1px solid #eee;color:#DC3545;font-size:12px;">{gap_text}</td>
+                    </tr>"""
+                    if forecast:
+                        forecast_items += f"<li style='margin-bottom:5px;'><strong>{name}</strong>: {forecast}</li>"
+
+            forecast_block = ""
+            if forecast_items:
+                forecast_block = f"""
+                <div style="padding:12px 15px;background:#fffbf0;border-top:1px solid #eee;">
+                  <div style="font-size:12px;font-weight:bold;color:#856404;margin-bottom:6px;">
+                    📈 ANALISI &amp; PREVISIONE — cosa manca e quanto si è vicini:
+                  </div>
+                  <ul style="margin:0;padding-left:20px;font-size:12px;color:#555;line-height:1.7;">
+                    {forecast_items}
+                  </ul>
+                </div>"""
+
+            near_cards += f"""
+            <div style="background:white;margin-bottom:22px;border-radius:8px;border:1px solid #ddd;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+              <!-- Card header -->
+              <div style="background:#FFC000;padding:12px 15px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:16px;font-weight:bold;color:#333;">#{rank} &nbsp;{f['nome'][:50]}</span>
+                <span style="background:white;color:#333;padding:4px 12px;border-radius:12px;font-weight:bold;font-size:13px;">
+                  {buy_count}/4 ✓
+                </span>
+              </div>
+
+              <!-- Sottotitolo -->
+              <div style="padding:7px 15px;background:#fff8e1;font-size:11px;color:#666;border-bottom:1px solid #ffe082;">
+                {f['casa']} &nbsp;·&nbsp; {f['categoria']} &nbsp;·&nbsp; ISIN: {f['isin']}
+              </div>
+
+              <!-- Valori tecnici -->
+              <div style="padding:12px 15px;border-bottom:1px solid #eee;">
+                <table style="width:100%;text-align:center;border-collapse:collapse;">
+                  <tr>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">Prezzo</div>
+                      <div style="font-size:15px;font-weight:bold;">{"€{:.4f}".format(price) if price else '–'}</div>
+                    </td>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">MM20</div>
+                      <div style="font-size:15px;font-weight:bold;">{"€{:.4f}".format(ma_val) if ma_val else '–'}</div>
+                    </td>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">RSI</div>
+                      <div style="font-size:15px;font-weight:bold;">{"{:.0f}".format(rsi_val) if rsi_val else '–'}</div>
+                    </td>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">1 giorno</div>
+                      <div style="font-size:15px;{pct_style(pct_1d)}">{fmt_pct(pct_1d)}</div>
+                    </td>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">1 settimana</div>
+                      <div style="font-size:15px;{pct_style(pct_1w)}">{fmt_pct(pct_1w)}</div>
+                    </td>
+                    <td style="padding:6px 4px;">
+                      <div style="font-size:10px;color:#999;text-transform:uppercase;">1 mese</div>
+                      <div style="font-size:15px;{pct_style(pct_1m)}">{fmt_pct(pct_1m)}</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Barra progresso verso L1 -->
+                <div style="margin-top:12px;">
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;margin-bottom:4px;">
+                    <span>Avanzamento verso L1 Pro</span>
+                    <span style="font-weight:bold;color:{bar_color};">{buy_count}/4 condizioni soddisfatte</span>
+                  </div>
+                  <div style="background:#eee;border-radius:4px;height:8px;">
+                    <div style="background:{bar_color};width:{bar_pct}%;height:8px;border-radius:4px;transition:width 0.3s;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Condizioni L1 Pro -->
+              <div style="padding:12px 15px;border-bottom:1px solid #eee;">
+                <div style="font-size:12px;font-weight:bold;color:#333;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
+                  Condizioni L1 Pro
+                </div>
+                <table style="width:100%;border-collapse:collapse;">
+                  {cond_rows}
+                </table>
+              </div>
+
+              {forecast_block}
+            </div>"""
+
+        if near_l1_funds:
+            near_section_body = near_cards
+        else:
+            near_section_body = "<p style='color:#999;font-style:italic;'>Nessun fondo L2 disponibile.</p>"
+
+        near_section = f"""
+        <div style="margin-bottom:20px;">
+          <h2 style="color:#B8860B;border-bottom:3px solid #FFC000;padding-bottom:8px;margin-top:0;">
+            📊 Top {n_near} Fondi L2 Più Vicini a L1
+            <span style="font-size:13px;font-weight:normal;color:#666;"> — ordinati per condizioni soddisfatte</span>
+          </h2>
+          <p style="color:#555;margin-top:0;">
+            Analisi quantitativa del gap verso Livello 1 Pro. Per ogni condizione mancante
+            è indicato il valore attuale, il gap numerico e la previsione su cosa serve.
+          </p>
+          {near_section_body}
+        </div>"""
+
+        body_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 740px; margin: 0 auto; background: #f0f2f5;">
+
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #00B050, #007A36); color: white; padding: 25px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px; letter-spacing: 0.5px;">🟢 DIGEST BUY GIORNALIERO</h1>
+            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">
+              {datetime.now().strftime('%A %d %B %Y')} &nbsp;·&nbsp; Fund Monitor System
+            </p>
+          </div>
+
+          <div style="padding: 20px;">
+            {promo_section}
+            {near_section}
+          </div>
+
+          <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
+            Fund Monitor System &nbsp;·&nbsp; Prossimo aggiornamento ore 18:00
+          </div>
+
+        </body>
+        </html>
+        """
+
+        return self._send_email(subject, body_html)
+
     def send_test_email(self) -> bool:
         """Invia email di test per verificare configurazione"""
         subject = "🧪 Test Fund Monitor System"
