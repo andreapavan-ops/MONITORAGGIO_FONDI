@@ -31,3 +31,6 @@ psycopg2-binary>=2.9.9
 
 # Historical data (Yahoo Finance)
 yfinance>=0.2.0
+
+# Email via Resend API (sostituisce Gmail SMTP bloccato da Railway)
+resend>=2.0.0
