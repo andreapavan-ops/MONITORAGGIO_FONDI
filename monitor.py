@@ -432,6 +432,8 @@ class FundMonitor:
                     'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
                     'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
                     'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
+                    'nav_rising_original': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_original', False)),
+                    'nav_rising_alt': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_alt', False)),
                 }
             }
             dashboard_data['levels'][level].append(fund_data)
@@ -780,6 +782,8 @@ class FundMonitor:
                             'rsi_optimal': bool(r['analysis'].get('level_conditions', {}).get('rsi_optimal', False)),
                             'nav_above_bb': bool(r['analysis'].get('level_conditions', {}).get('nav_above_upper_bb', False)),
                             'nav_rising': bool(r['analysis'].get('level_conditions', {}).get('nav_rising', False)),
+                            'nav_rising_original': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_original', False)),
+                            'nav_rising_alt': bool(r['analysis'].get('level_conditions', {}).get('nav_rising_alt', False)),
                         }
                     }
                     dashboard_data['levels'][r['livello']].append(fund_data)

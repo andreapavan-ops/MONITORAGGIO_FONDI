@@ -131,7 +131,7 @@
             1. Trend: NAV &gt; MM20 per 3+ gg, slope+, distanza &lt;soglia |
             2. Momentum: RSI in zona ottimale |
             3. Volatilit&agrave;: AZ: NAV nel 50% sup. BB | OBB/CRP: NAV &gt; MM20 |
-            4. Setup: NAV in salita 3+ degli ultimi 5 gg
+            4. Setup: <span style="background:#00B050;color:#fff;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">A</span> ≥3 gg consecutivi in salita &nbsp;|&nbsp; <span style="background:#FFC000;color:#222;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">B</span> prezzo oggi &gt; 5 gg fa &nbsp;(basta uno dei due)
             <br>
             <span style="color:#6ab7ff;">AZ</span> Azionari: RSI 55-68, dist &lt;6%, BB &plusmn;2&sigma;
             &nbsp;|&nbsp;
@@ -245,7 +245,7 @@
                     ${fmtPct(f.pct_1m)}
                     <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `T:${f.conditions.trend_ok?'OK':'NO'} R:${f.conditions.rsi_optimal?'OK':'NO'} B:${f.conditions.nav_above_bb?'OK':'NO'} S:${f.conditions.nav_rising?'OK':'NO'}` : ''}">${f.buy_count || 0}/4 ${f.conditions ? `<span class="cond-dots">${f.conditions.trend_ok?'<span style="color:#0f0">T</span>':'<span style="color:#555">T</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0">R</span>':'<span style="color:#555">R</span>'}${f.conditions.nav_above_bb?'<span style="color:#0f0">B</span>':'<span style="color:#555">B</span>'}${f.conditions.nav_rising?'<span style="color:#0f0">S</span>':'<span style="color:#555">S</span>'}</span>` : ''}</td>
+                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `T:${f.conditions.trend_ok?'OK':'NO'} R:${f.conditions.rsi_optimal?'OK':'NO'} B:${f.conditions.nav_above_bb?'OK':'NO'} S:${f.conditions.nav_rising?'OK':'NO'} | Setup: ${f.conditions.nav_rising_original?'A':''}${f.conditions.nav_rising_original&&f.conditions.nav_rising_alt?'+':''}${f.conditions.nav_rising_alt?'B':''}` : ''}">${f.buy_count || 0}/4 ${f.conditions ? `<span class="cond-dots">${f.conditions.trend_ok?'<span style="color:#0f0">T</span>':'<span style="color:#555">T</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0">R</span>':'<span style="color:#555">R</span>'}${f.conditions.nav_above_bb?'<span style="color:#0f0">B</span>':'<span style="color:#555">B</span>'}${f.conditions.nav_rising?'<span style="color:#0f0">S</span>':'<span style="color:#555">S</span>'}</span>${(()=>{const a=f.conditions.nav_rising_original,b=f.conditions.nav_rising_alt;if(a&&b)return '<span style="background:#00B050;color:#fff;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;letter-spacing:0.5px;">A+B</span>';if(a)return '<span style="background:#00B050;color:#fff;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;">A</span>';if(b)return '<span style="background:#FFC000;color:#222;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;">B</span>';return '';})()}` : ''}</td>
                 </tr>`;
             }).join('');
         }
