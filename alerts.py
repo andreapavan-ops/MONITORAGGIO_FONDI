@@ -82,6 +82,149 @@ class AlertSystem:
             print(f"❌ Errore invio email (Resend): {e}")
             return False
     
+    def send_l1_digest(self, l1_funds: list) -> bool:
+        """
+        Email giornaliera: lista di tutti i fondi in Livello 1 con tracking entrata.
+
+        Args:
+            l1_funds: Lista di dict con campi:
+                nome, isin, casa, categoria,
+                entry_date, entry_price, price, days_in_l1, pct_gain
+        """
+        today = datetime.now().strftime('%d/%m/%Y')
+        n = len(l1_funds)
+        subject = f"📊 Portfolio L1 — {n} fond{'i' if n != 1 else 'o'} — {today}"
+
+        rows_html = ""
+        for i, f in enumerate(l1_funds, start=1):
+            entry_date_str = (
+                f['entry_date'].strftime('%d/%m/%Y')
+                if hasattr(f['entry_date'], 'strftime')
+                else str(f['entry_date'])
+            )
+            entry_price = f.get('entry_price')
+            price = f.get('price')
+            pct = f.get('pct_gain')
+            days = f.get('days_in_l1', 0)
+
+            pct_color = '#00B050' if pct and pct >= 0 else '#DC3545'
+            pct_str = f"{pct:+.2f}%" if pct is not None else '–'
+            bg = '#f9f9f9' if i % 2 == 0 else 'white'
+
+            rows_html += f"""
+            <tr style="background:{bg};">
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;color:#666;">{i}</td>
+              <td style="padding:8px;border:1px solid #ddd;">
+                <strong>{f['nome'][:45]}</strong><br>
+                <span style="font-size:11px;color:#888;">{f['casa']} · {f['isin']}</span>
+              </td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{entry_date_str}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;">{days}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(entry_price) if entry_price else '–'}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(price) if price else '–'}</td>
+              <td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:bold;color:{pct_color};">{pct_str}</td>
+            </tr>"""
+
+        body_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; background: #f0f2f5;">
+          <div style="background: linear-gradient(135deg, #00B050, #007A36); color: white; padding: 25px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px;">📊 Portfolio Livello 1</h1>
+            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">
+              {datetime.now().strftime('%A %d %B %Y')} &nbsp;·&nbsp; {n} fond{'i' if n != 1 else 'o'} in portafoglio
+            </p>
+          </div>
+
+          <div style="padding: 20px; background: white;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="background:#00B050;color:white;">
+                  <th style="padding:8px;border:1px solid #ddd;">#</th>
+                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Fondo</th>
+                  <th style="padding:8px;border:1px solid #ddd;">Entrato il</th>
+                  <th style="padding:8px;border:1px solid #ddd;">Giorni in L1</th>
+                  <th style="padding:8px;border:1px solid #ddd;">Prezzo entrata</th>
+                  <th style="padding:8px;border:1px solid #ddd;">Prezzo attuale</th>
+                  <th style="padding:8px;border:1px solid #ddd;">Guadagno %</th>
+                </tr>
+              </thead>
+              <tbody>{rows_html}</tbody>
+            </table>
+          </div>
+
+          <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
+            Fund Monitor System &nbsp;·&nbsp; Prossimo aggiornamento ore 18:00
+          </div>
+        </body>
+        </html>
+        """
+        return self._send_email(subject, body_html)
+
+    def send_sell_l1_exit(self, fund_info: dict) -> bool:
+        """
+        Email di uscita da L1: prezzo entrata, prezzo uscita, % guadagno/perdita.
+
+        Args:
+            fund_info: dict con nome, isin, casa, categoria,
+                       entry_date, entry_price, exit_price, days_in_l1, pct_gain
+        """
+        pct = fund_info.get('pct_gain')
+        pct_str = f"{pct:+.2f}%" if pct is not None else 'N/D'
+        pct_color = '#00B050' if pct and pct >= 0 else '#DC3545'
+        result_label = 'GUADAGNO' if pct and pct >= 0 else 'PERDITA'
+
+        entry_date_str = (
+            fund_info['entry_date'].strftime('%d/%m/%Y')
+            if hasattr(fund_info.get('entry_date'), 'strftime')
+            else str(fund_info.get('entry_date', '–'))
+        )
+        today = datetime.now().strftime('%d/%m/%Y')
+        subject = f"🔴 Uscita L1 — {fund_info['nome'][:40]} — {today}"
+
+        body_html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f0f2f5;">
+          <div style="background: linear-gradient(135deg, #DC3545, #AA0000); color: white; padding: 25px; text-align: center;">
+            <h1 style="margin: 0; font-size: 22px;">🔴 USCITA DA LIVELLO 1</h1>
+            <p style="margin: 6px 0 0 0; opacity: 0.9; font-size: 14px;">{today}</p>
+          </div>
+
+          <div style="padding: 20px; background: white;">
+            <h2 style="color:#333;margin-top:0;">{fund_info['nome']}</h2>
+            <p style="color:#666;margin-top:-10px;">{fund_info['casa']} · {fund_info['categoria']} · {fund_info['isin']}</p>
+
+            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+              <tr style="background:#f5f5f5;">
+                <td style="padding:12px;border:1px solid #ddd;"><strong>Data entrata in L1</strong></td>
+                <td style="padding:12px;border:1px solid #ddd;">{entry_date_str}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px;border:1px solid #ddd;"><strong>Giorni in L1</strong></td>
+                <td style="padding:12px;border:1px solid #ddd;">{fund_info.get('days_in_l1', '–')} giorni</td>
+              </tr>
+              <tr style="background:#f5f5f5;">
+                <td style="padding:12px;border:1px solid #ddd;"><strong>Prezzo di entrata</strong></td>
+                <td style="padding:12px;border:1px solid #ddd;">{"€{:.4f}".format(fund_info['entry_price']) if fund_info.get('entry_price') else '–'}</td>
+              </tr>
+              <tr>
+                <td style="padding:12px;border:1px solid #ddd;"><strong>Prezzo di uscita</strong></td>
+                <td style="padding:12px;border:1px solid #ddd;">{"€{:.4f}".format(fund_info['exit_price']) if fund_info.get('exit_price') else '–'}</td>
+              </tr>
+              <tr style="background:{pct_color};color:white;">
+                <td style="padding:12px;border:1px solid #ddd;"><strong>{result_label}</strong></td>
+                <td style="padding:12px;border:1px solid #ddd;font-size:18px;font-weight:bold;">{pct_str}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="padding: 15px; background: #333; color: #999; text-align: center; font-size: 12px;">
+            Fund Monitor System &nbsp;·&nbsp; {datetime.now().strftime('%d/%m/%Y %H:%M')}
+          </div>
+        </body>
+        </html>
+        """
+        return self._send_email(subject, body_html)
+
     def send_buy_alert(self, fund: Dict, analysis: Dict) -> bool:
         """
         Invia alert di acquisto

@@ -636,56 +636,117 @@ class FundMonitor:
 
     def send_alerts(self, results: list):
         """
-        Invia alert per segnali significativi.
+        Invia alert giornalieri basati sul tracking L1.
 
-        - SELL su L1/L2: email individuale urgente
-        - BUY: unica email digest giornaliera con:
-            * Fondi promossi a L1 (tutte 4 condizioni soddisfatte)
-            * Top 3 fondi L2 più vicini a L1 con analisi gap e previsione
+        - Email digest giornaliera con TUTTI i fondi in L1 (con prezzo entrata e % guadagno)
+        - Email individuale per ogni fondo che ESCE da L1 (con prezzo entrata/uscita e %)
         """
-        promoted_to_l1 = []   # Fondi (qualsiasi livello) con suggested_level == 1
-        near_l1 = []          # Fondi L2 non ancora a L1, candidati top 3
+        from datetime import date as date_type
+
+        today = datetime.now().date()
+        today_str = today.strftime('%Y-%m-%d')
+
+        # Recupera tracking esistente dal DB
+        existing_l1 = self.db.get_all_l1_entries()  # {isin: {entry_date, entry_price}}
+
+        # Fondi con suggested_level == 1 oggi
+        current_l1_isins = set()
+        l1_funds_data = []
 
         for r in results:
-            signal = r['analysis'].get('final_signal', 'HOLD')
-            level = r['livello']
-            suggested = r['analysis'].get('suggested_level', level)
+            suggested = r['analysis'].get('suggested_level', r['livello'])
+            if suggested != 1:
+                continue
 
-            fund_info = {
-                'isin': r['isin'],
+            isin = r['isin']
+            price = r['analysis'].get('current_price')
+            current_l1_isins.add(isin)
+
+            # Nuovo ingresso in L1: registra data e prezzo
+            if isin not in existing_l1:
+                self.db.set_l1_entry(isin, today_str, price)
+                entry_date = today
+                entry_price = float(price) if price else None
+                add_log(f"  🟢 Nuovo L1: {r['nome'][:40]} — entrato oggi a €{entry_price:.4f}" if entry_price else f"  🟢 Nuovo L1: {r['nome'][:40]}")
+            else:
+                entry = existing_l1[isin]
+                entry_date = entry['entry_date']
+                entry_price = entry['entry_price']
+
+            # Calcola giorni in L1 e % guadagno
+            if isinstance(entry_date, date_type):
+                days_in_l1 = (today - entry_date).days
+            else:
+                try:
+                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days
+                except Exception:
+                    days_in_l1 = 0
+
+            pct_gain = None
+            if price and entry_price:
+                pct_gain = round((float(price) - float(entry_price)) / float(entry_price) * 100, 2)
+
+            l1_funds_data.append({
+                'isin': isin,
                 'nome': r['nome'],
                 'casa': r['casa'],
                 'categoria': r['categoria'],
-                'livello': level,
-                'analysis': r['analysis'],
+                'entry_date': entry_date,
+                'entry_price': entry_price,
+                'price': float(price) if price else None,
+                'days_in_l1': days_in_l1,
+                'pct_gain': pct_gain,
+            })
+
+        # Fondi che escono da L1
+        for isin, entry in existing_l1.items():
+            if isin in current_l1_isins:
+                continue
+
+            # Trovalo nei risultati per il prezzo di uscita
+            fund_result = next((r for r in results if r['isin'] == isin), None)
+            if not fund_result:
+                # Non è più nella lista fondi — rimuovi tracking silenziosamente
+                self.db.remove_l1_entry(isin)
+                continue
+
+            exit_price = fund_result['analysis'].get('current_price')
+            entry_price = entry['entry_price']
+            entry_date = entry['entry_date']
+
+            if isinstance(entry_date, date_type):
+                days_in_l1 = (today - entry_date).days
+            else:
+                try:
+                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days
+                except Exception:
+                    days_in_l1 = 0
+
+            pct_gain = None
+            if exit_price and entry_price:
+                pct_gain = round((float(exit_price) - float(entry_price)) / float(entry_price) * 100, 2)
+
+            sell_info = {
+                'isin': isin,
+                'nome': fund_result['nome'],
+                'casa': fund_result['casa'],
+                'categoria': fund_result['categoria'],
+                'entry_date': entry_date,
+                'entry_price': entry_price,
+                'exit_price': float(exit_price) if exit_price else None,
+                'days_in_l1': days_in_l1,
+                'pct_gain': pct_gain,
             }
+            add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_gain:+.2f}%" if pct_gain is not None else f"  🔴 Uscita L1: {fund_result['nome'][:40]}")
+            self.alert_system.send_sell_l1_exit(sell_info)
+            self.db.remove_l1_entry(isin)
 
-            # SELL su L1: urgente, email individuale (solo L1)
-            if level == 1 and signal == 'SELL':
-                add_log(f"  🔴 Alert SELL L1: {r['nome'][:40]}")
-                self.alert_system.send_sell_alert(fund_info, r['analysis'])
-
-            # BUY: fondo con tutte 4 condizioni ok (già a L1 o appena promosso)
-            elif suggested == 1:
-                label = f"L{level}→L1" if level != 1 else "L1 confermato"
-                add_log(f"  ⬆️ BUY {label} (digest): {r['nome'][:40]}")
-                promoted_to_l1.append(fund_info)
-
-            # Fondi L2 non promossi: candidati top 3 per analisi gap
-            elif level == 2:
-                gap_info = self._compute_gap_analysis(r)
-                near_l1.append({**fund_info, 'gap_info': gap_info})
-
-        # Ordina L2 per buy_count decrescente, prendi top 3
-        near_l1_sorted = sorted(near_l1, key=lambda x: x['gap_info'].get('buy_count', 0), reverse=True)
-        top3 = near_l1_sorted[:3]
-
-        # Invia unica digest BUY
-        if promoted_to_l1 or near_l1:
-            add_log(f"  📧 Invio digest BUY: {len(promoted_to_l1)} promossi a L1, {len(top3)} top L2")
-            self.alert_system.send_buy_digest(promoted_to_l1, top3)
+        # Invia digest giornaliero L1
+        if l1_funds_data:
+            add_log(f"  📧 Invio digest L1: {len(l1_funds_data)} fondi in portafoglio")
+            self.alert_system.send_l1_digest(l1_funds_data)
         else:
-            add_log("  ℹ️ Nessun fondo L2 da reportare — digest BUY non inviato")
+            add_log("  ℹ️ Nessun fondo in L1 — digest non inviato")
     
     def run(self, send_daily_report: bool = True):
         """
@@ -801,31 +862,14 @@ class FundMonitor:
         except Exception as e:
             add_log(f"Step 5 ERRORE Alert: {e}")
 
-        # 6. Report giornaliero
-        if send_daily_report:
-            try:
-                add_log("Step 6: Invio report giornaliero...")
-                summary = {
-                    'buy_signals': dashboard_data['summary']['buy_signals'],
-                    'sell_signals': dashboard_data['summary']['sell_signals'],
-                    'hold_signals': dashboard_data['summary']['hold_signals'],
-                    'level_1': dashboard_data['levels'].get(1, []),
-                    'level_2': dashboard_data['levels'].get(2, []),
-                    'level_3': dashboard_data['levels'].get(3, [])[:10]
-                }
-                self.alert_system.send_daily_report(summary)
-                add_log("Step 6: Report OK")
-            except Exception as e:
-                add_log(f"Step 6 ERRORE Report: {e}")
-
-        # 7. Health report via email
+        # 6. Health report via email (solo in caso di errori)
         if hasattr(self, '_health_report'):
             try:
-                add_log("Step 7: Invio health report...")
+                add_log("Step 6: Invio health report...")
                 self.alert_system.send_health_report(self._health_report)
-                add_log("Step 7: Health report OK")
+                add_log("Step 6: Health report OK")
             except Exception as e:
-                add_log(f"Step 7 ERRORE Health report: {e}")
+                add_log(f"Step 6 ERRORE Health report: {e}")
 
         add_log(f"Monitoraggio completato - {datetime.now().strftime('%H:%M')}")
         add_log("="*50)
