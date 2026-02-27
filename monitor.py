@@ -673,14 +673,14 @@ class FundMonitor:
                 entry_date = entry['entry_date']
                 entry_price = entry['entry_price']
 
-            # Calcola giorni in L1 e % guadagno
+            # Calcola giorni in L1 e % guadagno (giorno 1 = giorno di entrata)
             if isinstance(entry_date, date_type):
-                days_in_l1 = (today - entry_date).days
+                days_in_l1 = (today - entry_date).days + 1
             else:
                 try:
-                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days
+                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days + 1
                 except Exception:
-                    days_in_l1 = 0
+                    days_in_l1 = 1
 
             pct_gain = None
             if price and entry_price:
@@ -715,12 +715,12 @@ class FundMonitor:
             entry_date = entry['entry_date']
 
             if isinstance(entry_date, date_type):
-                days_in_l1 = (today - entry_date).days
+                days_in_l1 = (today - entry_date).days + 1
             else:
                 try:
-                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days
+                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days + 1
                 except Exception:
-                    days_in_l1 = 0
+                    days_in_l1 = 1
 
             pct_gain = None
             if exit_price and entry_price:
