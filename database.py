@@ -408,7 +408,7 @@ class PriceDatabase:
                     INSERT INTO l1_tracking (isin, entry_date, entry_price)
                     VALUES (%s, %s, %s)
                     ON CONFLICT (isin) DO NOTHING
-                """, (isin, entry_date, entry_price))
+                """, (isin, entry_date, float(entry_price)))
                 conn.commit()
                 return True
         except Exception as e:
