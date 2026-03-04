@@ -370,7 +370,16 @@ class TechnicalAnalyzer:
         }
 
         # Determina livello suggerito
-        if not price_above_ma:
+        if current_level == 1:
+            # USCITA ASIMMETRICA: in L1 si resta finché prezzo > MM20.
+            # Solo una rottura della MM20 giustifica l'uscita (non il deterioramento di RSI/BB).
+            if not price_above_ma:
+                suggested = 3
+                reason = f'Uscita L1: Prezzo sceso sotto MM20 dopo {days_above} giorni'
+            else:
+                suggested = 1
+                reason = f'Mantenuto L1 — Prezzo sopra MM20 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f})'
+        elif not price_above_ma:
             suggested = 3
             reason = 'Prezzo sotto Media Mobile'
         elif trend_ok and rsi_optimal and nav_above_upper_bb and nav_rising:
