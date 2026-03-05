@@ -143,11 +143,21 @@ class FundDataFetcher:
                 f"&to={date_to.strftime('%Y/%m/%d')}"
             )
 
-            response = self.session.get(url, timeout=20)
+            response = self.session.get(url, timeout=20, stream=True)
             if response.status_code != 200:
+                response.close()
                 return pd.DataFrame(columns=['date', 'nav'])
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            # Limita la risposta a 2MB — pagine più grandi sono anomale
+            content = b''
+            for chunk in response.iter_content(chunk_size=65536):
+                content += chunk
+                if len(content) > 2_000_000:
+                    response.close()
+                    return pd.DataFrame(columns=['date', 'nav'])
+            response.close()
+
+            soup = BeautifulSoup(content.decode('utf-8', errors='replace'), 'html.parser')
 
             # Cerca la tabella storico prezzi
             table = soup.find('table', class_='mod-ui-table')
