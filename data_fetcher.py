@@ -6,6 +6,9 @@ Utilizza diverse fonti per ottenere i prezzi dei fondi:
 2. Yahoo Finance (backup)
 """
 
+import socket
+socket.setdefaulttimeout(25)  # Timeout globale per TUTTE le socket (incluso C code)
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
