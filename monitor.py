@@ -775,14 +775,18 @@ class FundMonitor:
 
         for idx, row in df_funds.iterrows():
             try:
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(self.analyze_fund, row)
-                    try:
-                        result = future.result(timeout=60)  # Max 60s per fondo
-                    except FuturesTimeoutError:
-                        add_log(f"  TIMEOUT {row['ISIN']} ({row['Nome Fondo'][:30]}): saltato dopo 60s")
-                        errors.append({'isin': row['ISIN'], 'error': 'timeout 60s', 'traceback': ''})
-                        continue
+                executor = ThreadPoolExecutor(max_workers=1)
+                future = executor.submit(self.analyze_fund, row)
+                timed_out = False
+                try:
+                    result = future.result(timeout=60)  # Max 60s per fondo
+                except FuturesTimeoutError:
+                    timed_out = True
+                    add_log(f"  TIMEOUT {row['ISIN']} ({row['Nome Fondo'][:30]}): saltato dopo 60s")
+                    errors.append({'isin': row['ISIN'], 'error': 'timeout 60s', 'traceback': ''})
+                executor.shutdown(wait=False)  # Non bloccare — thread orfano continua in bg
+                if timed_out:
+                    continue
                 results.append(result)
                 add_log(f"  OK {row['ISIN']} - {row['Nome Fondo'][:30]}")
                 time.sleep(0.5)  # Rate limiting
