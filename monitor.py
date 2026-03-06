@@ -232,7 +232,7 @@ class FundMonitor:
 
         if len(prices) < 5:
             # Storico insufficiente - prova Yahoo Finance come ultima risorsa
-            df_hist = self.data_fetcher.get_historical_nav(isin, days=30)
+            df_hist = self.data_fetcher.get_historical_nav(isin, days=45)
             if not df_hist.empty:
                 prices = pd.Series(df_hist['nav'].values)
             # Se ancora insufficiente, l'analisi restituirà "dati insufficienti"

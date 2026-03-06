@@ -21,7 +21,7 @@ class TechnicalAnalyzer:
     # Profili parametri per tipo di asset
     PROFILES = {
         'equity': {
-            'ma_period': 20,
+            'ma_period': 30,
             'rsi_period': 14,
             'rsi_oversold': 30,
             'rsi_overbought': 70,
@@ -266,10 +266,10 @@ class TechnicalAnalyzer:
         Suggerisce il livello appropriato per un fondo - Schema L1 Pro
 
         Logica L1 Pro (4 condizioni):
-        1. TREND: Prezzo > MM20 per 3+ gg, slope positivo, distanza < 6%
+        1. TREND: Prezzo > MM30 per 3+ gg, slope positivo
         2. MOMENTUM: RSI 55-68
-        3. VOLATILITA: NAV sopra Banda Bollinger superiore
-        4. SETUP: NAV in salita per 2+ giorni consecutivi
+        3. DISTANZA: NAV < 6% sopra MM30 (non tirato)
+        4. SETUP-B: Prezzo oggi > Prezzo 5 giorni fa
 
         Livelli:
         - Livello 3: Prezzo sotto MM (monitoraggio passivo)
@@ -316,8 +316,8 @@ class TechnicalAnalyzer:
         slope_positive = ma_slope > 0
         distance_ok = distance_from_ma < self.max_distance_from_ma  # < 6%
 
-        # Condizione 1: TREND (prezzo > MM20 3+gg, slope+, distanza < 6%)
-        trend_ok = price_above_ma_3days and slope_positive and distance_ok
+        # Condizione 1: TREND (prezzo > MM30 3+gg, slope+)
+        trend_ok = price_above_ma_3days and slope_positive
 
         # Condizione 2: MOMENTUM (RSI 55-68)
         rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
@@ -345,8 +345,8 @@ class TechnicalAnalyzer:
             nav_rising_alt = False
             pct_vs_5d = 0.0
 
-        # Combinata: L1 se passa almeno una delle due
-        nav_rising = nav_rising_original or nav_rising_alt
+        # Solo Setup B (più veloce, compensa lentezza MM30)
+        nav_rising = nav_rising_alt
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -375,17 +375,16 @@ class TechnicalAnalyzer:
             # Solo una rottura della MM20 giustifica l'uscita (non il deterioramento di RSI/BB).
             if not price_above_ma:
                 suggested = 3
-                reason = f'Uscita L1: Prezzo sceso sotto MM20 dopo {days_above} giorni'
+                reason = f'Uscita L1: Prezzo sceso sotto MM30 dopo {days_above} giorni'
             else:
                 suggested = 1
-                reason = f'Mantenuto L1 — Prezzo sopra MM20 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f})'
+                reason = f'Mantenuto L1 — Prezzo sopra MM30 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f})'
         elif not price_above_ma:
             suggested = 3
             reason = 'Prezzo sotto Media Mobile'
-        elif trend_ok and rsi_optimal and nav_above_upper_bb and nav_rising:
+        elif trend_ok and rsi_optimal and distance_ok and nav_rising:
             suggested = 1
-            bb_label = 'BB 50%+' if self.bb_condition == 'upper_half' else 'NAV>MM'
-            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, {bb_label}, {rising_days}gg salita'
+            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, dist<6%, +{pct_vs_5d:.1f}% vs 5gg'
         elif price_above_ma_3days:
             suggested = 2
             reason = f'Prezzo sopra MM da {days_above} giorni consecutivi'
@@ -642,10 +641,10 @@ class TechnicalAnalyzer:
         # Conteggio condizioni BUY L1 Pro (4 condizioni)
         lc = level_suggestion['conditions']
         buy_count = sum([
-            lc.get('trend_ok', False),           # 1. Trend: >MM20 3gg + slope+ + dist<6%
+            lc.get('trend_ok', False),           # 1. Trend: >MM30 3gg + slope+
             lc.get('rsi_optimal', False),         # 2. Momentum: RSI 55-68
-            lc.get('nav_above_upper_bb', False),  # 3. Volatilità: NAV > BB superiore
-            lc.get('nav_rising', False)           # 4. Setup: NAV in salita 2+gg
+            lc.get('distance_ok', False),         # 3. Distanza: <6% dalla MM30
+            lc.get('nav_rising_alt', False)       # 4. Setup B: prezzo oggi > prezzo 5gg fa
         ])
 
         # Calcola distanza dal max 52 settimane
