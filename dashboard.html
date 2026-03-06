@@ -120,7 +120,7 @@
     <div class="column-header">
         <table>
             <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr>
+            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr>
         </table>
     </div>
 
@@ -128,16 +128,16 @@
 
         <div class="legend">
             <strong>L1 Pro - Condizioni BUY (4/4 richieste):</strong>
-            1. Trend: NAV &gt; MM20 per 3+ gg, slope+, distanza &lt;soglia |
+            1. Trend: NAV &gt; MM30 per 3+ gg, slope+ |
             2. Momentum: RSI in zona ottimale |
-            3. Volatilit&agrave;: AZ: NAV nel 50% sup. BB | OBB/CRP: NAV &gt; MM20 |
-            4. Setup: <span style="background:#00B050;color:#fff;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">A</span> ≥3 gg consecutivi in salita &nbsp;|&nbsp; <span style="background:#FFC000;color:#222;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">B</span> prezzo oggi &gt; 5 gg fa &nbsp;(basta uno dei due)
+            3. Distanza: NAV &lt;6% sopra MM30 |
+            4. Setup: <span style="background:#FFC000;color:#222;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">B</span> prezzo oggi &gt; prezzo 5 gg fa
             <br>
-            <span style="color:#6ab7ff;">AZ</span> Azionari: RSI 55-68, dist &lt;6%, BB &plusmn;2&sigma;
+            <span style="color:#6ab7ff;">AZ</span> Azionari: RSI 55-68, dist &lt;6%
             &nbsp;|&nbsp;
-            <span style="color:#e8a0ff;">CRP</span> Corporate/Flessibili: RSI 52-63, dist &lt;3%, BB &plusmn;1.8&sigma;
+            <span style="color:#e8a0ff;">CRP</span> Corporate/Flessibili: RSI 52-63, dist &lt;3%
             &nbsp;|&nbsp;
-            <span style="color:#ffb347;">OBB</span> Gov/Breve Termine: RSI 48-58, dist &lt;1.5%, BB &plusmn;1.5&sigma;
+            <span style="color:#ffb347;">OBB</span> Gov/Breve Termine: RSI 48-58, dist &lt;1.5%
         </div>
 
         <div class="category-filters" id="categoryFilters"></div>
@@ -146,7 +146,7 @@
             <div class="level-header"><span>LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level1Body"></tbody>
             </table>
         </div>
@@ -155,7 +155,7 @@
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
@@ -164,7 +164,7 @@
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
