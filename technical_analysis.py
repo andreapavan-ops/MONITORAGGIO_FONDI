@@ -28,8 +28,8 @@ class TechnicalAnalyzer:
             'bollinger_period': 20,
             'bollinger_std': 2.0,
             'days_above_ma': 3,
-            'rsi_optimal_low': 55,
-            'rsi_optimal_high': 68,
+            'rsi_optimal_low': 50,
+            'rsi_optimal_high': 72,
             'max_distance_from_ma': 6.0,
             'ma_signal_threshold': 2.0,  # % sopra/sotto MM per segnale BUY/SELL
             'bb_condition': 'upper_half',  # NAV nel 50% superiore delle bande BB

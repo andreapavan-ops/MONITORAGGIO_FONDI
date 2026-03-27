@@ -737,6 +737,7 @@ class FundMonitor:
                 'exit_price': float(exit_price) if exit_price else None,
                 'days_in_l1': days_in_l1,
                 'pct_gain': pct_gain,
+                'conditions': fund_result['analysis'].get('level_conditions', {}),
             }
             add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_gain:+.2f}%" if pct_gain is not None else f"  🔴 Uscita L1: {fund_result['nome'][:40]}")
             self.alert_system.send_sell_l1_exit(sell_info)

@@ -181,6 +181,34 @@ class AlertSystem:
         today = datetime.now().strftime('%d/%m/%Y')
         subject = f"🔴 Uscita L1 — {fund_info['nome'][:40]} — {today}"
 
+        # Tabella condizioni L1 al momento dell'uscita
+        cond = fund_info.get('conditions', {})
+        def cond_row(label, ok, detail):
+            icon  = '✅' if ok else '❌'
+            color = '#d4edda' if ok else '#f8d7da'
+            text_color = '#155724' if ok else '#721c24'
+            return (f'<tr style="background:{color};">'
+                    f'<td style="padding:8px 12px;border:1px solid #ddd;text-align:center;font-size:15px;">{icon}</td>'
+                    f'<td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;color:{text_color};font-size:12px;">{label}</td>'
+                    f'<td style="padding:8px 12px;border:1px solid #ddd;color:{text_color};font-size:12px;">{detail}</td>'
+                    f'</tr>')
+
+        rsi_val      = cond.get('rsi', 0)
+        dist_val     = cond.get('distance_from_ma', 0)
+        pct_5d       = cond.get('pct_vs_5d', 0)
+        days_above   = cond.get('days_above_ma', 0)
+
+        cond_rows_html = (
+            cond_row('TREND',    cond.get('trend_ok', False),
+                     f"NAV sopra MM30 da {days_above} gg · slope {'↑' if cond.get('slope_positive') else '↓'}") +
+            cond_row('MOMENTUM', cond.get('rsi_optimal', False),
+                     f"RSI = {rsi_val:.0f} (range 50–72)") +
+            cond_row('DISTANZA', cond.get('distance_ok', False),
+                     f"NAV a {dist_val:.1f}% sopra MM30 (max 6%)") +
+            cond_row('SETUP-B',  cond.get('nav_rising_alt', False),
+                     f"Prezzo vs 5gg fa: {pct_5d:+.2f}%")
+        ) if cond else '<tr><td colspan="3" style="padding:10px;color:#999;text-align:center;">Dati condizioni non disponibili</td></tr>'
+
         body_html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f0f2f5;">
@@ -193,7 +221,7 @@ class AlertSystem:
             <h2 style="color:#333;margin-top:0;">{fund_info['nome']}</h2>
             <p style="color:#666;margin-top:-10px;">{fund_info['casa']} · {fund_info['categoria']} · {fund_info['isin']}</p>
 
-            <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
               <tr style="background:#f5f5f5;">
                 <td style="padding:12px;border:1px solid #ddd;"><strong>Data entrata in L1</strong></td>
                 <td style="padding:12px;border:1px solid #ddd;">{entry_date_str}</td>
@@ -214,6 +242,20 @@ class AlertSystem:
                 <td style="padding:12px;border:1px solid #ddd;"><strong>{result_label}</strong></td>
                 <td style="padding:12px;border:1px solid #ddd;font-size:18px;font-weight:bold;">{pct_str}</td>
               </tr>
+            </table>
+
+            <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
+              Stato condizioni L1 al momento dell'uscita
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="background:#555;color:white;">
+                  <th style="padding:8px;border:1px solid #ddd;width:40px;"></th>
+                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Condizione</th>
+                  <th style="padding:8px;border:1px solid #ddd;text-align:left;">Valore</th>
+                </tr>
+              </thead>
+              <tbody>{cond_rows_html}</tbody>
             </table>
           </div>
 
