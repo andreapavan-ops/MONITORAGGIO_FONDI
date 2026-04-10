@@ -197,6 +197,33 @@ class AlertSystem:
         dist_val     = cond.get('distance_from_ma', 0)
         pct_5d       = cond.get('pct_vs_5d', 0)
         days_above   = cond.get('days_above_ma', 0)
+        exit_rule    = cond.get('exit_rule')
+        exit_trigger = cond.get('exit_trigger', '–')
+
+        # Banner colorato con la regola di uscita
+        if exit_rule == 1:
+            rule_bg    = '#6c757d'
+            rule_icon  = '📉'
+            rule_title = 'REGOLA 1 — ROTTURA TREND'
+            rule_desc  = 'NAV sceso sotto MM30: il trend primario è terminato.'
+        elif exit_rule == 2:
+            rule_bg    = '#fd7e14'
+            rule_icon  = '🔝'
+            rule_title = 'REGOLA 2 — USCITA SUI MASSIMI'
+            rule_desc  = 'Fondo in ipercomprato (RSI > 72) e già in inversione (Setup-B < 0): vendiamo in cima.'
+        else:
+            rule_bg    = '#555'
+            rule_icon  = '🔴'
+            rule_title = 'USCITA DA L1'
+            rule_desc  = 'Condizioni L1 non più soddisfatte.'
+
+        exit_rule_html = f"""
+        <div style="margin-bottom:18px;padding:14px 18px;background:{rule_bg};border-radius:8px;color:white;">
+          <div style="font-size:16px;font-weight:bold;margin-bottom:4px;">{rule_icon} {rule_title}</div>
+          <div style="font-size:13px;opacity:0.9;">{rule_desc}</div>
+          <div style="font-size:12px;margin-top:6px;font-family:monospace;background:rgba(0,0,0,0.2);
+               padding:4px 8px;border-radius:4px;display:inline-block;">Trigger: {exit_trigger}</div>
+        </div>"""
 
         cond_rows_html = (
             cond_row('TREND',    cond.get('trend_ok', False),
@@ -243,6 +270,8 @@ class AlertSystem:
                 <td style="padding:12px;border:1px solid #ddd;font-size:18px;font-weight:bold;">{pct_str}</td>
               </tr>
             </table>
+
+            {exit_rule_html}
 
             <div style="font-size:13px;font-weight:bold;color:#333;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">
               Stato condizioni L1 al momento dell'uscita

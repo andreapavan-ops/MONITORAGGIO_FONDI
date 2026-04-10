@@ -739,7 +739,11 @@ class FundMonitor:
                 'pct_gain': pct_gain,
                 'conditions': fund_result['analysis'].get('level_conditions', {}),
             }
-            add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_gain:+.2f}%" if pct_gain is not None else f"  🔴 Uscita L1: {fund_result['nome'][:40]}")
+            exit_rule    = fund_result['analysis'].get('level_conditions', {}).get('exit_rule')
+            exit_trigger = fund_result['analysis'].get('level_conditions', {}).get('exit_trigger', '')
+            rule_label   = f'[Regola {exit_rule}: {exit_trigger}]' if exit_rule else ''
+            pct_str      = f'{pct_gain:+.2f}%' if pct_gain is not None else 'N/D'
+            add_log(f"  🔴 Uscita L1: {fund_result['nome'][:40]} — {pct_str} {rule_label}")
             self.alert_system.send_sell_l1_exit(sell_info)
             self.db.remove_l1_entry(isin)
 

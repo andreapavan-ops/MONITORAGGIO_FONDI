@@ -371,12 +371,27 @@ class TechnicalAnalyzer:
 
         # Determina livello suggerito
         if current_level == 1:
-            # USCITA ASIMMETRICA: in L1 si resta finché prezzo > MM20.
-            # Solo una rottura della MM20 giustifica l'uscita (non il deterioramento di RSI/BB).
+            # USCITA L1 — 2 REGOLE (basta una sola per uscire):
+            #
+            # REGOLA 1: NAV < MM30 → sempre! Se il trend muore, scappiamo subito.
+            # REGOLA 2: RSI > 72 E Setup-B < -0.5% → uscita sui massimi:
+            #           vendiamo solo se è caro (RSI alto) E sta già girando (Setup-B negativo).
+            #           Soglia -0.5% evita falsi trigger su micro-oscillazioni giornaliere.
             if not price_above_ma:
+                # --- REGOLA 1: rottura MM30 ---
+                conditions['exit_rule'] = 1
+                conditions['exit_trigger'] = 'NAV < MM30'
                 suggested = 3
-                reason = f'Uscita L1: Prezzo sceso sotto MM30 dopo {days_above} giorni'
+                reason = f'Uscita L1 [Regola 1 — Trend]: NAV sceso sotto MM30 dopo {days_above} gg sopra'
+            elif rsi_current > 72 and pct_vs_5d < -0.5:
+                # --- REGOLA 2: overbought + inversione ---
+                conditions['exit_rule'] = 2
+                conditions['exit_trigger'] = f'RSI {rsi_current:.0f} > 72 + Setup-B {pct_vs_5d:+.2f}%'
+                suggested = 3
+                reason = f'Uscita L1 [Regola 2 — Massimi]: RSI={rsi_current:.0f}>72 e Setup-B={pct_vs_5d:+.2f}% — vendita in cima'
             else:
+                conditions['exit_rule'] = None
+                conditions['exit_trigger'] = None
                 suggested = 1
                 reason = f'Mantenuto L1 — Prezzo sopra MM30 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f})'
         elif not price_above_ma:
