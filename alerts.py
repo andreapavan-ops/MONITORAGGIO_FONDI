@@ -84,16 +84,31 @@ class AlertSystem:
     
     def send_l1_digest(self, l1_funds: list) -> bool:
         """
-        Email giornaliera: lista di tutti i fondi in Livello 1 con tracking entrata.
+        Email giornaliera: lista di tutti i fondi in Livello 1 con tracking entrata
+        e riga indicatori (TREND, MOMENTUM, DISTANZA, SETUP-B).
 
         Args:
             l1_funds: Lista di dict con campi:
                 nome, isin, casa, categoria,
-                entry_date, entry_price, price, days_in_l1, pct_gain
+                entry_date, entry_price, price, days_in_l1, pct_gain,
+                level_conditions (opzionale)
         """
         today = datetime.now().strftime('%d/%m/%Y')
         n = len(l1_funds)
         subject = f"📊 Portfolio L1 — {n} fond{'i' if n != 1 else 'o'} — {today}"
+
+        def ind_cell(label, ref, value_str, ok):
+            bg   = '#d4edda' if ok else '#f8d7da'
+            col  = '#155724' if ok else '#721c24'
+            icon = '✅' if ok else '❌'
+            return (
+                f'<td style="padding:4px 6px;border:1px solid #ddd;background:{bg};color:{col};'
+                f'font-size:10px;text-align:center;width:25%;">'
+                f'{icon} <b>{label}</b><br>'
+                f'<span style="font-size:9px;color:#777;">{ref}</span><br>'
+                f'<span style="font-weight:bold;">{value_str}</span>'
+                f'</td>'
+            )
 
         rows_html = ""
         for i, f in enumerate(l1_funds, start=1):
@@ -111,6 +126,25 @@ class AlertSystem:
             pct_str = f"{pct:+.2f}%" if pct is not None else '–'
             bg = '#f9f9f9' if i % 2 == 0 else 'white'
 
+            # Indicatori L1 (4 condizioni fondi)
+            lc       = f.get('level_conditions', {})
+            rsi_val  = float(lc.get('rsi') or 0)
+            dist_val = float(lc.get('distance_from_ma') or 0)
+            pct_5d   = float(lc.get('pct_vs_5d') or 0)
+            days_ab  = int(lc.get('days_above_ma') or 0)
+
+            trend_ok = lc.get('trend_ok', False)
+            rsi_ok   = lc.get('rsi_optimal', False)
+            dist_ok  = lc.get('distance_ok', False)
+            setup_ok = lc.get('nav_rising_alt', False)
+
+            ind_row_html = (
+                ind_cell('TREND',    f'{days_ab}gg sopra MM',  f'slope {"↑" if lc.get("slope_positive") else "↓"}', trend_ok) +
+                ind_cell('MOMENTUM', 'RSI 50–72',              f'RSI={rsi_val:.0f}',                                 rsi_ok) +
+                ind_cell('DISTANZA', 'max 6% da MM',           f'{dist_val:+.1f}%',                                  dist_ok) +
+                ind_cell('SETUP-B',  'P vs 5gg fa',            f'{pct_5d:+.2f}%',                                    setup_ok)
+            )
+
             rows_html += f"""
             <tr style="background:{bg};">
               <td style="padding:8px;border:1px solid #ddd;text-align:center;color:#666;">{i}</td>
@@ -123,6 +157,12 @@ class AlertSystem:
               <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(entry_price) if entry_price else '–'}</td>
               <td style="padding:8px;border:1px solid #ddd;text-align:right;">{"€{:.4f}".format(price) if price else '–'}</td>
               <td style="padding:8px;border:1px solid #ddd;text-align:center;font-weight:bold;color:{pct_color};">{pct_str}</td>
+            </tr>
+            <tr style="background:#fafafa;">
+              <td style="padding:2px;border:1px solid #ddd;"></td>
+              <td colspan="6" style="padding:4px 8px 6px 8px;border:1px solid #ddd;">
+                <table style="width:100%;border-collapse:collapse;"><tr>{ind_row_html}</tr></table>
+              </td>
             </tr>"""
 
         body_html = f"""

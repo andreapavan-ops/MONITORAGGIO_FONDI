@@ -674,14 +674,13 @@ class FundMonitor:
                 entry_date = entry['entry_date']
                 entry_price = entry['entry_price']
 
-            # Calcola giorni in L1 e % guadagno (giorno 1 = giorno di entrata)
-            if isinstance(entry_date, date_type):
-                days_in_l1 = (today - entry_date).days + 1
-            else:
-                try:
-                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days + 1
-                except Exception:
-                    days_in_l1 = 1
+            # Calcola giorni in L1 (solo giorni di borsa, esclude weekend)
+            try:
+                import numpy as np
+                ed = entry_date if isinstance(entry_date, date_type) else datetime.fromisoformat(str(entry_date)).date()
+                days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
+            except Exception:
+                days_in_l1 = 1
 
             pct_gain = None
             if price and entry_price:
@@ -697,6 +696,7 @@ class FundMonitor:
                 'price': float(price) if price else None,
                 'days_in_l1': days_in_l1,
                 'pct_gain': pct_gain,
+                'level_conditions': r['analysis'].get('level_conditions', {}),
             })
 
         # Fondi che escono da L1
@@ -715,13 +715,12 @@ class FundMonitor:
             entry_price = entry['entry_price']
             entry_date = entry['entry_date']
 
-            if isinstance(entry_date, date_type):
-                days_in_l1 = (today - entry_date).days + 1
-            else:
-                try:
-                    days_in_l1 = (today - datetime.fromisoformat(str(entry_date)).date()).days + 1
-                except Exception:
-                    days_in_l1 = 1
+            try:
+                import numpy as np
+                ed = entry_date if isinstance(entry_date, date_type) else datetime.fromisoformat(str(entry_date)).date()
+                days_in_l1 = max(1, int(np.busday_count(ed, today)) + 1)
+            except Exception:
+                days_in_l1 = 1
 
             pct_gain = None
             if exit_price and entry_price:
