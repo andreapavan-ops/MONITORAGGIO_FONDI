@@ -120,24 +120,24 @@
     <div class="column-header">
         <table>
             <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr>
+            <tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr>
         </table>
     </div>
 
     <div class="container">
 
         <div class="legend">
-            <strong>L1 Pro - Condizioni BUY (4/4 richieste):</strong>
-            1. Trend: NAV &gt; MM30 per 3+ gg, slope+ |
-            2. Momentum: RSI in zona ottimale |
-            3. Distanza: NAV &lt;6% sopra MM30 |
-            4. Setup: <span style="background:#FFC000;color:#222;font-size:0.85em;padding:1px 5px;border-radius:3px;font-weight:bold;">B</span> prezzo oggi &gt; prezzo 5 gg fa
+            <strong>L1 "Trend Sicuro" - Condizioni ENTRATA (5/5 richieste):</strong>
+            1. Allineamento: MM20 &gt; MM50 e NAV &gt; MM20 |
+            2. Persistenza: NAV sopra MM20 per 5+ gg consecutivi, slope&uarr; |
+            3. Momentum: RSI 55–65 |
+            4. Distanza: NAV max 2.5% sopra MM20 |
+            5. ADX: ADX(14) &gt; 25 (forza trend)
             <br>
-            <span style="color:#6ab7ff;">AZ</span> Azionari: RSI 55-68, dist &lt;6%
-            &nbsp;|&nbsp;
-            <span style="color:#e8a0ff;">CRP</span> Corporate/Flessibili: RSI 52-63, dist &lt;3%
-            &nbsp;|&nbsp;
-            <span style="color:#ffb347;">OBB</span> Gov/Breve Termine: RSI 48-58, dist &lt;1.5%
+            <strong>Uscita L1:</strong>
+            A. Stop Loss: NAV &lt; MM20 &nbsp;|&nbsp;
+            B. Trailing Stop: MM5 &lt; MM20 &nbsp;|&nbsp;
+            C. Stanchezza: RSI era &gt;75 e piega verso il basso
         </div>
 
         <div class="category-filters" id="categoryFilters"></div>
@@ -146,7 +146,7 @@
             <div class="level-header"><span>LIVELLO 1 - Core Portfolio</span><span id="l1Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level1Body"></tbody>
             </table>
         </div>
@@ -155,7 +155,7 @@
             <div class="level-header"><span>LIVELLO 2 - Watchlist</span><span id="l2Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Casa</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level2Body"></tbody>
             </table>
         </div>
@@ -164,7 +164,7 @@
             <div class="level-header"><span>LIVELLO 3 - Universe</span><span id="l3Count">0 fondi</span></div>
             <table class="fund-table">
                 <colgroup><col class="col-nome"><col class="col-casa"><col class="col-prezzo"><col class="col-pct"><col class="col-pct"><col class="col-pct"><col class="col-ma"><col class="col-rsi"><col class="col-buy"></colgroup>
-                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM30</th><th>RSI</th><th>BUY</th></tr></thead>
+                <thead><tr><th>Fondo</th><th>Categoria</th><th>Prezzo</th><th>%1G</th><th>%1W</th><th>%1M</th><th>MM20</th><th>RSI</th><th>BUY</th></tr></thead>
                 <tbody id="level3Body"></tbody>
             </table>
         </div>
@@ -245,7 +245,7 @@
                     ${fmtPct(f.pct_1m)}
                     <td>${f.ma ? f.ma.toFixed(2) : '-'}</td>
                     <td class="rsi ${rsiClass}">${f.rsi ? f.rsi.toFixed(0) : '-'}</td>
-                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `T:${f.conditions.trend_ok?'OK':'NO'} R:${f.conditions.rsi_optimal?'OK':'NO'} B:${f.conditions.nav_above_bb?'OK':'NO'} S:${f.conditions.nav_rising?'OK':'NO'} | Setup: ${f.conditions.nav_rising_original?'A':''}${f.conditions.nav_rising_original&&f.conditions.nav_rising_alt?'+':''}${f.conditions.nav_rising_alt?'B':''}` : ''}">${f.buy_count || 0}/4 ${f.conditions ? `<span class="cond-dots">${f.conditions.trend_ok?'<span style="color:#0f0">T</span>':'<span style="color:#555">T</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0">R</span>':'<span style="color:#555">R</span>'}${f.conditions.nav_above_bb?'<span style="color:#0f0">B</span>':'<span style="color:#555">B</span>'}${f.conditions.nav_rising?'<span style="color:#0f0">S</span>':'<span style="color:#555">S</span>'}</span>${(()=>{const a=f.conditions.nav_rising_original,b=f.conditions.nav_rising_alt;if(a&&b)return '<span style="background:#00B050;color:#fff;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;letter-spacing:0.5px;">A+B</span>';if(a)return '<span style="background:#00B050;color:#fff;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;">A</span>';if(b)return '<span style="background:#FFC000;color:#222;font-size:0.65em;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:bold;">B</span>';return '';})()}` : ''}</td>
+                    <td class="buy-count bc${f.buy_count || 0}" title="${f.conditions ? `Allin:${f.conditions.allineamento_ok?'OK':'NO'} Pers:${f.conditions.persistenza_ok?'OK':'NO'} RSI:${f.conditions.rsi_optimal?'OK':'NO'} Dist:${f.conditions.distance_ok?'OK':'NO'} ADX:${f.conditions.adx_ok?'OK':'NO'}` : ''}">${f.buy_count || 0}/5 ${f.conditions ? `<span class="cond-dots">${f.conditions.allineamento_ok?'<span style="color:#0f0" title="Allineamento MM20>MM50">A</span>':'<span style="color:#555" title="Allineamento MM20>MM50">A</span>'}${f.conditions.persistenza_ok?'<span style="color:#0f0" title="Persistenza 5gg+slope">P</span>':'<span style="color:#555" title="Persistenza 5gg+slope">P</span>'}${f.conditions.rsi_optimal?'<span style="color:#0f0" title="Momentum RSI 55-65">M</span>':'<span style="color:#555" title="Momentum RSI 55-65">M</span>'}${f.conditions.distance_ok?'<span style="color:#0f0" title="Distanza <2.5%">D</span>':'<span style="color:#555" title="Distanza <2.5%">D</span>'}${f.conditions.adx_ok?'<span style="color:#0f0" title="ADX>25">X</span>':'<span style="color:#555" title="ADX>25">X</span>'}</span>` : ''}</td>
                 </tr>`;
             }).join('');
         }

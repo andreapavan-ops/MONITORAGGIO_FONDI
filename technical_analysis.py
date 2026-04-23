@@ -722,13 +722,14 @@ class TechnicalAnalyzer:
         # Suggerimento livello automatico
         level_suggestion = self.suggest_level(prices, current_level=level)
 
-        # Conteggio condizioni BUY L1 Pro (4 condizioni)
+        # Conteggio condizioni BUY L1 Trend Sicuro (5 condizioni)
         lc = level_suggestion['conditions']
         buy_count = sum([
-            lc.get('trend_ok', False),           # 1. Trend: >MM30 3gg + slope+
-            lc.get('rsi_optimal', False),         # 2. Momentum: RSI 55-68
-            lc.get('distance_ok', False),         # 3. Distanza: <6% dalla MM30
-            lc.get('nav_rising_alt', False)       # 4. Setup B: prezzo oggi > prezzo 5gg fa
+            lc.get('allineamento_ok', False),   # 1. MM20>MM50 + price>MM20
+            lc.get('persistenza_ok', False),    # 2. 5gg sopra MM20 + slope+
+            lc.get('rsi_optimal', False),       # 3. RSI 55-65
+            lc.get('distance_ok', False),       # 4. dist <2.5% da MM20
+            lc.get('adx_ok', False),            # 5. ADX > 25
         ])
 
         # Calcola distanza dal max 52 settimane
