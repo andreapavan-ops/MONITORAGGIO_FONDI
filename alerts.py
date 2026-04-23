@@ -249,17 +249,25 @@ class AlertSystem:
         exit_rule    = cond.get('exit_rule')
         exit_trigger = cond.get('exit_trigger', '–')
 
+        rsi_prev_val = cond.get('rsi_prev', 0)
+        mm5_val      = cond.get('mm5_current')
+
         # Banner colorato con la regola di uscita
         if exit_rule == 1:
             rule_bg    = '#6c757d'
-            rule_icon  = '📉'
-            rule_title = 'REGOLA 1 — ROTTURA TREND'
-            rule_desc  = 'NAV sceso sotto MM20: il trend primario è terminato.'
+            rule_icon  = '🛑'
+            rule_title = 'REGOLA A — STOP LOSS'
+            rule_desc  = 'NAV sceso sotto MM20: la tesi di investimento è fallita. Esci e salva il capitale.'
         elif exit_rule == 2:
             rule_bg    = '#fd7e14'
-            rule_icon  = '🔝'
-            rule_title = 'REGOLA 2 — USCITA SUI MASSIMI'
-            rule_desc  = 'Fondo in ipercomprato (RSI > 72) e già in inversione (Setup-B < 0): vendiamo in cima.'
+            rule_icon  = '🔀'
+            rule_title = 'REGOLA B — TRAILING STOP'
+            rule_desc  = 'MM5 ha incrociato MM20 al ribasso: il rally ha perso slancio. Incassa i guadagni prima che scenda.'
+        elif exit_rule == 3:
+            rule_bg    = '#dc3545'
+            rule_icon  = '😮'
+            rule_title = 'REGOLA C — STANCHEZZA RSI'
+            rule_desc  = f'RSI ha superato 75 (era {rsi_prev_val:.0f}) e ora piega verso il basso: il mercato è esausto. Vendi in cima.'
         else:
             rule_bg    = '#555'
             rule_icon  = '🔴'
@@ -274,18 +282,20 @@ class AlertSystem:
                padding:4px 8px;border-radius:4px;display:inline-block;">Trigger: {exit_trigger}</div>
         </div>"""
 
-        mm_detail = (f"MM20={mm20_val:.4f} · MM50={mm50_val:.4f}"
-                     if mm20_val and mm50_val else "MM50 non disponibile")
+        mm_detail  = (f"MM20={mm20_val:.4f} · MM50={mm50_val:.4f}"
+                      if mm20_val and mm50_val else "MM50 non disponibile")
+        mm5_detail = (f"MM5={mm5_val:.4f} · MM20={mm20_val:.4f} ({'MM5<MM20 ⚠️' if mm5_val and mm20_val and mm5_val < mm20_val else 'OK'})"
+                      if mm5_val and mm20_val else "–")
         cond_rows_html = (
-            cond_row('ALLINEAMENTO', cond.get('allineamento_ok', False),
-                     f"Prezzo > MM20 e MM20 > MM50 · {mm_detail}") +
-            cond_row('PERSISTENZA',  cond.get('persistenza_ok', False),
-                     f"NAV sopra MM20 da {days_above} gg (min 5) · slope {'↑' if cond.get('slope_positive') else '↓'}") +
-            cond_row('MOMENTUM',     cond.get('rsi_optimal', False),
+            cond_row('STOP LOSS (A)',     cond.get('price_above_ma', False),
+                     f"NAV sopra MM20 · {mm_detail}") +
+            cond_row('TRAILING STOP (B)', not (mm5_val and mm20_val and mm5_val < mm20_val),
+                     mm5_detail) +
+            cond_row('RSI STANCHEZZA (C)', not (rsi_prev_val > 75 and rsi_val < rsi_prev_val),
+                     f"RSI attuale={rsi_val:.0f} · RSI precedente={rsi_prev_val:.0f} · soglia 75") +
+            cond_row('MOMENTUM',          cond.get('rsi_optimal', False),
                      f"RSI = {rsi_val:.0f} (range 55–65)") +
-            cond_row('DISTANZA',     cond.get('distance_ok', False),
-                     f"NAV a {dist_val:.1f}% sopra MM20 (max 2.5%)") +
-            cond_row('ADX',          cond.get('adx_ok', False),
+            cond_row('ADX',               cond.get('adx_ok', False),
                      f"ADX = {adx_val:.0f} (min 25 — forza trend)")
         ) if cond else '<tr><td colspan="3" style="padding:10px;color:#999;text-align:center;">Dati condizioni non disponibili</td></tr>'
 

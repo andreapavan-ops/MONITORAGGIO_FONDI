@@ -342,10 +342,18 @@ class TechnicalAnalyzer:
         adx_series  = self.calculate_adx(prices)
         adx_current = float(adx_series.iloc[-1]) if len(adx_series) > 0 and pd.notna(adx_series.iloc[-1]) else 0.0
 
+        # MM5 (per Regola B di uscita)
+        ma5 = self.calculate_ma(prices, 5)
+        ma5_current = float(ma5.iloc[-1]) if pd.notna(ma5.iloc[-1]) else None
+
+        # RSI precedente (per Regola C di uscita)
+        rsi_clean = rsi.dropna()
+        rsi_prev = float(rsi_clean.iloc[-2]) if len(rsi_clean) >= 2 else rsi_current
+
         # Distanza % da MM20
         distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
 
-        # Setup-B: prezzo oggi vs 5 giorni fa (mantenuto per uscita L1)
+        # Setup-B: prezzo oggi vs 5 giorni fa (mantenuto per retro-compat)
         if len(prices) >= 6:
             price_5d_ago = prices.iloc[-6]
             nav_rising_alt = float(current_price) > float(price_5d_ago)
@@ -416,30 +424,44 @@ class TechnicalAnalyzer:
             'persistenza_ok': persistenza_ok,
             'adx': round(adx_current, 1),
             'adx_ok': adx_ok,
+            # Per regole uscita
+            'mm5_current': round(ma5_current, 4) if ma5_current is not None else None,
+            'rsi_prev': round(rsi_prev, 1),
             # Aggregati (per buy_count e retro-compat)
             'trend_ok': trend_ok,
         }
 
+        # Segnali uscita L1 (calcolati sempre, usati solo se current_level==1)
+        ma5_below_ma20  = (ma5_current is not None and pd.notna(ma_current)
+                           and ma5_current < float(ma_current))
+        rsi_exhaustion  = rsi_prev > 75 and rsi_current < rsi_prev
+
         # Determina livello suggerito
         if current_level == 1:
-            # USCITA L1 — 2 REGOLE:
-            # Regola 1: NAV < MM20 → trend morto, esci subito
-            # Regola 2: RSI > 72 E Setup-B < -0.5% → uscita sui massimi
+            # USCITA L1 — 3 REGOLE (in ordine di priorità):
+            # Regola A: NAV < MM20 → stop loss, tesi fallita
+            # Regola B: MM5 < MM20 → trailing stop, rally esaurito
+            # Regola C: RSI > 75 e piega in giù → stanchezza, vendi in cima
             if not price_above_ma:
                 conditions['exit_rule'] = 1
-                conditions['exit_trigger'] = 'NAV < MM20'
+                conditions['exit_trigger'] = f'NAV {float(current_price):.4f} < MM20 {float(ma_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola 1 — Trend]: NAV sceso sotto MM20 dopo {days_above} gg sopra'
-            elif rsi_current > 72 and pct_vs_5d < -0.5:
+                reason = f'Uscita L1 [Regola A — Stop Loss]: NAV sceso sotto MM20'
+            elif ma5_below_ma20:
                 conditions['exit_rule'] = 2
-                conditions['exit_trigger'] = f'RSI {rsi_current:.0f} > 72 + Setup-B {pct_vs_5d:+.2f}%'
+                conditions['exit_trigger'] = f'MM5={ma5_current:.4f} < MM20={float(ma_current):.4f}'
                 suggested = 3
-                reason = f'Uscita L1 [Regola 2 — Massimi]: RSI={rsi_current:.0f}>72 e Setup-B={pct_vs_5d:+.2f}% — vendita in cima'
+                reason = f'Uscita L1 [Regola B — Trailing Stop]: MM5 ha incrociato MM20 al ribasso'
+            elif rsi_exhaustion:
+                conditions['exit_rule'] = 3
+                conditions['exit_trigger'] = f'RSI era {rsi_prev:.0f} > 75, ora {rsi_current:.0f} (↓)'
+                suggested = 3
+                reason = f'Uscita L1 [Regola C — Stanchezza]: RSI={rsi_current:.0f} in discesa da {rsi_prev:.0f}'
             else:
                 conditions['exit_rule'] = None
                 conditions['exit_trigger'] = None
                 suggested = 1
-                reason = f'Mantenuto L1 — Prezzo sopra MM20 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f}, ADX {adx_current:.0f})'
+                reason = f'Mantenuto L1 — NAV sopra MM5 e MM20 (RSI {rsi_current:.0f}, ADX {adx_current:.0f})'
         elif not price_above_ma:
             suggested = 3
             reason = 'Prezzo sotto MM20'
