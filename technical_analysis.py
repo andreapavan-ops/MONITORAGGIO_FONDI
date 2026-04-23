@@ -21,18 +21,21 @@ class TechnicalAnalyzer:
     # Profili parametri per tipo di asset
     PROFILES = {
         'equity': {
-            'ma_period': 30,
+            'ma_period': 20,           # MM20 (breve)
+            'ma_period_slow': 50,      # MM50 (medio) — per golden cross
+            'adx_period': 14,          # ADX period
+            'adx_threshold': 25,       # ADX minimo per trend valido
             'rsi_period': 14,
             'rsi_oversold': 30,
             'rsi_overbought': 70,
             'bollinger_period': 20,
             'bollinger_std': 2.0,
-            'days_above_ma': 3,
-            'rsi_optimal_low': 50,
-            'rsi_optimal_high': 72,
-            'max_distance_from_ma': 6.0,
-            'ma_signal_threshold': 2.0,  # % sopra/sotto MM per segnale BUY/SELL
-            'bb_condition': 'upper_half',  # NAV nel 50% superiore delle bande BB
+            'days_above_ma': 5,        # Persistenza: 5 giorni sopra MM20
+            'rsi_optimal_low': 55,     # Momentum: RSI 55–65
+            'rsi_optimal_high': 65,
+            'max_distance_from_ma': 2.5,  # Distanza max 2.5% da MM20
+            'ma_signal_threshold': 2.0,
+            'bb_condition': 'upper_half',
         },
         'bond': {
             'ma_period': 20,
@@ -114,6 +117,9 @@ class TechnicalAnalyzer:
             profile.update(config)
 
         self.ma_period = profile['ma_period']
+        self.ma_period_slow = profile.get('ma_period_slow', 50)
+        self.adx_period = profile.get('adx_period', 14)
+        self.adx_threshold = profile.get('adx_threshold', 25)
         self.rsi_period = profile['rsi_period']
         self.rsi_oversold = profile['rsi_oversold']
         self.rsi_overbought = profile['rsi_overbought']
@@ -209,6 +215,27 @@ class TechnicalAnalyzer:
         # Espansione = width attuale > width di N giorni fa
         return recent_width.iloc[-1] > recent_width.iloc[0]
 
+    def calculate_adx(self, prices: pd.Series, period: int = None) -> pd.Series:
+        """
+        Calcola ADX approssimato usando soli prezzi di chiusura (NAV).
+        Stima +DM/-DM dai movimenti daily: sufficiente per misurare forza del trend
+        anche senza dati High/Low.
+        """
+        period = period or self.adx_period
+        delta = prices.diff()
+        plus_dm  = delta.clip(lower=0)
+        minus_dm = (-delta).clip(lower=0)
+        tr = delta.abs()
+        alpha = 1.0 / period
+        atr      = tr.ewm(alpha=alpha, adjust=False).mean()
+        safe_atr = atr.replace(0, np.nan)
+        plus_di  = 100 * (plus_dm.ewm(alpha=alpha, adjust=False).mean() / safe_atr)
+        minus_di = 100 * (minus_dm.ewm(alpha=alpha, adjust=False).mean() / safe_atr)
+        di_sum   = (plus_di + minus_di).replace(0, np.nan)
+        dx       = 100 * (plus_di - minus_di).abs() / di_sum
+        adx      = dx.ewm(alpha=alpha, adjust=False).mean()
+        return adx
+
     def count_days_above_ma(self, prices: pd.Series, ma: pd.Series, max_days: int = 10) -> int:
         """
         Conta i giorni consecutivi in cui il prezzo è sopra la MM
@@ -291,9 +318,16 @@ class TechnicalAnalyzer:
             }
 
         # Calcola indicatori
-        ma = self.calculate_ma(prices)
+        ma = self.calculate_ma(prices)               # MM20
         ma_current = ma.iloc[-1]
         current_price = prices.iloc[-1]
+
+        # MM50 (se disponibile)
+        if len(prices) >= self.ma_period_slow:
+            ma50 = self.calculate_ma(prices, self.ma_period_slow)
+            ma50_current = ma50.iloc[-1]
+        else:
+            ma50_current = None
 
         rsi = self.calculate_rsi(prices)
         rsi_current = rsi.iloc[-1] if len(rsi) > 0 and pd.notna(rsi.iloc[-1]) else 50
@@ -304,39 +338,14 @@ class TechnicalAnalyzer:
         bollinger = self.calculate_bollinger_bands(prices)
         bb_upper = bollinger['upper'].iloc[-1] if pd.notna(bollinger['upper'].iloc[-1]) else None
 
-        # Distanza % dal MM20
+        # ADX
+        adx_series  = self.calculate_adx(prices)
+        adx_current = float(adx_series.iloc[-1]) if len(adx_series) > 0 and pd.notna(adx_series.iloc[-1]) else 0.0
+
+        # Distanza % da MM20
         distance_from_ma = ((current_price - ma_current) / ma_current * 100) if pd.notna(ma_current) and ma_current != 0 else 0
 
-        # Giorni in salita su ultimi 5
-        rising_days = self.count_rising_days(prices, window=5)
-
-        # === CONDIZIONI L1 PRO ===
-        price_above_ma = current_price > ma_current if pd.notna(ma_current) else False
-        price_above_ma_3days = days_above >= self.days_above_ma
-        slope_positive = ma_slope > 0
-        distance_ok = distance_from_ma < self.max_distance_from_ma  # < 6%
-
-        # Condizione 1: TREND (prezzo > MM30 3+gg, slope+)
-        trend_ok = price_above_ma_3days and slope_positive
-
-        # Condizione 2: MOMENTUM (RSI 55-68)
-        rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
-
-        # Condizione 3: VOLATILITA (posizione nelle Bande di Bollinger)
-        # Equity: NAV nel 50% superiore delle bande (midpoint tra MA e banda superiore)
-        # Bond/Bond_HY: NAV sopra la media BB (= MM20)
-        if self.bb_condition == 'upper_half' and bb_upper is not None and ma_current is not None:
-            bb_midpoint = (ma_current + bb_upper) / 2
-            nav_above_upper_bb = current_price >= bb_midpoint
-        elif self.bb_condition == 'above_ma' and ma_current is not None:
-            nav_above_upper_bb = current_price > ma_current
-        else:
-            nav_above_upper_bb = False
-
-        # Condizione 4a: SETUP-A (NAV in salita 3+ giorni consecutivi)
-        nav_rising_original = rising_days >= 3
-
-        # Condizione 4b: SETUP-B (prezzo oggi > prezzo 5 giorni fa — direzione netta)
+        # Setup-B: prezzo oggi vs 5 giorni fa (mantenuto per uscita L1)
         if len(prices) >= 6:
             price_5d_ago = prices.iloc[-6]
             nav_rising_alt = float(current_price) > float(price_5d_ago)
@@ -345,8 +354,43 @@ class TechnicalAnalyzer:
             nav_rising_alt = False
             pct_vs_5d = 0.0
 
-        # Solo Setup B (più veloce, compensa lentezza MM30)
+        # ── CONDIZIONI L1 "TREND SICURO" (5 condizioni, tutte obbligatorie) ──────
+        price_above_ma  = current_price > ma_current if pd.notna(ma_current) else False
+        slope_positive  = ma_slope > 0
+
+        # 1. ALLINEAMENTO: Price > MM20 AND MM20 > MM50
+        mm20_above_mm50 = (pd.notna(ma_current) and ma50_current is not None
+                           and pd.notna(ma50_current) and float(ma_current) > float(ma50_current))
+        allineamento_ok = price_above_ma and mm20_above_mm50
+
+        # 2. PERSISTENZA: ≥5 giorni consecutivi sopra MM20 + slope↑
+        price_above_ma_ndays = days_above >= self.days_above_ma
+        persistenza_ok = price_above_ma_ndays and slope_positive
+
+        # 3. MOMENTUM: RSI 55–65
+        rsi_optimal = self.rsi_optimal_low <= rsi_current <= self.rsi_optimal_high
+
+        # 4. DISTANZA: NAV sopra MM20 di max 2.5%
+        distance_ok = 0 <= distance_from_ma < self.max_distance_from_ma
+
+        # 5. ADX: > 25 (trend con direzione)
+        adx_ok = adx_current > self.adx_threshold
+
+        # Retro-compat (usato da exit logic e buy_count)
+        trend_ok = persistenza_ok
         nav_rising = nav_rising_alt
+        price_above_ma_3days = days_above >= 3  # per L2
+
+        # Bollinger (usato solo per segnali generali, non per L1 entry)
+        if self.bb_condition == 'upper_half' and bb_upper is not None and ma_current is not None:
+            bb_midpoint = (ma_current + bb_upper) / 2
+            nav_above_upper_bb = current_price >= bb_midpoint
+        elif self.bb_condition == 'above_ma' and ma_current is not None:
+            nav_above_upper_bb = current_price > ma_current
+        else:
+            nav_above_upper_bb = False
+
+        rising_days = self.count_rising_days(prices, window=5)
 
         conditions = {
             'price_above_ma': price_above_ma,
@@ -361,30 +405,32 @@ class TechnicalAnalyzer:
             'bb_upper': round(bb_upper, 4) if bb_upper else None,
             'nav_above_upper_bb': nav_above_upper_bb,
             'rising_days': rising_days,
-            'nav_rising_original': nav_rising_original,
             'nav_rising_alt': nav_rising_alt,
+            'nav_rising': nav_rising,
             'pct_vs_5d': round(pct_vs_5d, 2),
-            'nav_rising': nav_rising,  # OR combinato (usato per buy_count)
-            # Le 4 condizioni aggregate per buy_count
+            # Nuove condizioni L1 Trend Sicuro
+            'mm20_current': round(float(ma_current), 4) if pd.notna(ma_current) else None,
+            'mm50_current': round(float(ma50_current), 4) if ma50_current is not None and pd.notna(ma50_current) else None,
+            'mm20_above_mm50': mm20_above_mm50,
+            'allineamento_ok': allineamento_ok,
+            'persistenza_ok': persistenza_ok,
+            'adx': round(adx_current, 1),
+            'adx_ok': adx_ok,
+            # Aggregati (per buy_count e retro-compat)
             'trend_ok': trend_ok,
         }
 
         # Determina livello suggerito
         if current_level == 1:
-            # USCITA L1 — 2 REGOLE (basta una sola per uscire):
-            #
-            # REGOLA 1: NAV < MM30 → sempre! Se il trend muore, scappiamo subito.
-            # REGOLA 2: RSI > 72 E Setup-B < -0.5% → uscita sui massimi:
-            #           vendiamo solo se è caro (RSI alto) E sta già girando (Setup-B negativo).
-            #           Soglia -0.5% evita falsi trigger su micro-oscillazioni giornaliere.
+            # USCITA L1 — 2 REGOLE:
+            # Regola 1: NAV < MM20 → trend morto, esci subito
+            # Regola 2: RSI > 72 E Setup-B < -0.5% → uscita sui massimi
             if not price_above_ma:
-                # --- REGOLA 1: rottura MM30 ---
                 conditions['exit_rule'] = 1
-                conditions['exit_trigger'] = 'NAV < MM30'
+                conditions['exit_trigger'] = 'NAV < MM20'
                 suggested = 3
-                reason = f'Uscita L1 [Regola 1 — Trend]: NAV sceso sotto MM30 dopo {days_above} gg sopra'
+                reason = f'Uscita L1 [Regola 1 — Trend]: NAV sceso sotto MM20 dopo {days_above} gg sopra'
             elif rsi_current > 72 and pct_vs_5d < -0.5:
-                # --- REGOLA 2: overbought + inversione ---
                 conditions['exit_rule'] = 2
                 conditions['exit_trigger'] = f'RSI {rsi_current:.0f} > 72 + Setup-B {pct_vs_5d:+.2f}%'
                 suggested = 3
@@ -393,19 +439,20 @@ class TechnicalAnalyzer:
                 conditions['exit_rule'] = None
                 conditions['exit_trigger'] = None
                 suggested = 1
-                reason = f'Mantenuto L1 — Prezzo sopra MM30 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f})'
+                reason = f'Mantenuto L1 — Prezzo sopra MM20 ({distance_from_ma:.1f}% dalla MM, RSI {rsi_current:.0f}, ADX {adx_current:.0f})'
         elif not price_above_ma:
             suggested = 3
-            reason = 'Prezzo sotto Media Mobile'
-        elif trend_ok and rsi_optimal and distance_ok and nav_rising:
+            reason = 'Prezzo sotto MM20'
+        elif allineamento_ok and persistenza_ok and rsi_optimal and distance_ok and adx_ok:
             suggested = 1
-            reason = f'BUY ALERT L1 Pro: Trend OK (dist {distance_from_ma:.1f}%), RSI {rsi_current:.0f}, dist<6%, +{pct_vs_5d:.1f}% vs 5gg'
+            reason = (f'L1 Trend Sicuro: MM20>MM50 ✓, {days_above}gg sopra MM20 ✓, '
+                      f'RSI {rsi_current:.0f} ✓, dist {distance_from_ma:.1f}% ✓, ADX {adx_current:.0f} ✓')
         elif price_above_ma_3days:
             suggested = 2
-            reason = f'Prezzo sopra MM da {days_above} giorni consecutivi'
+            reason = f'Prezzo sopra MM20 da {days_above} giorni consecutivi'
         elif price_above_ma:
             suggested = 3
-            reason = f'Prezzo sopra MM da {days_above} giorni (servono {self.days_above_ma})'
+            reason = f'Prezzo sopra MM20 da {days_above} giorni (servono {self.days_above_ma})'
         else:
             suggested = 3
             reason = 'Monitoraggio passivo'

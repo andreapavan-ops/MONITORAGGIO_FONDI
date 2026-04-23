@@ -103,7 +103,7 @@ class AlertSystem:
             icon = '✅' if ok else '❌'
             return (
                 f'<td style="padding:4px 6px;border:1px solid #ddd;background:{bg};color:{col};'
-                f'font-size:10px;text-align:center;width:25%;">'
+                f'font-size:10px;text-align:center;width:20%;">'
                 f'{icon} <b>{label}</b><br>'
                 f'<span style="font-size:9px;color:#777;">{ref}</span><br>'
                 f'<span style="font-weight:bold;">{value_str}</span>'
@@ -126,23 +126,30 @@ class AlertSystem:
             pct_str = f"{pct:+.2f}%" if pct is not None else '–'
             bg = '#f9f9f9' if i % 2 == 0 else 'white'
 
-            # Indicatori L1 (4 condizioni fondi)
-            lc       = f.get('level_conditions', {})
-            rsi_val  = float(lc.get('rsi') or 0)
-            dist_val = float(lc.get('distance_from_ma') or 0)
-            pct_5d   = float(lc.get('pct_vs_5d') or 0)
-            days_ab  = int(lc.get('days_above_ma') or 0)
+            # Indicatori L1 — 5 condizioni "Trend Sicuro"
+            lc        = f.get('level_conditions', {})
+            rsi_val   = float(lc.get('rsi') or 0)
+            dist_val  = float(lc.get('distance_from_ma') or 0)
+            days_ab   = int(lc.get('days_above_ma') or 0)
+            adx_val   = float(lc.get('adx') or 0)
+            mm20_val  = lc.get('mm20_current')
+            mm50_val  = lc.get('mm50_current')
 
-            trend_ok = lc.get('trend_ok', False)
-            rsi_ok   = lc.get('rsi_optimal', False)
-            dist_ok  = lc.get('distance_ok', False)
-            setup_ok = lc.get('nav_rising_alt', False)
+            allin_ok  = lc.get('allineamento_ok', False)
+            pers_ok   = lc.get('persistenza_ok', False)
+            rsi_ok    = lc.get('rsi_optimal', False)
+            dist_ok   = lc.get('distance_ok', False)
+            adx_ok    = lc.get('adx_ok', False)
+
+            mm_str = (f'MM20={mm20_val:.4f} MM50={mm50_val:.4f}'
+                      if mm20_val and mm50_val else 'MM50 n.d.')
 
             ind_row_html = (
-                ind_cell('TREND',    f'{days_ab}gg sopra MM',  f'slope {"↑" if lc.get("slope_positive") else "↓"}', trend_ok) +
-                ind_cell('MOMENTUM', 'RSI 50–72',              f'RSI={rsi_val:.0f}',                                 rsi_ok) +
-                ind_cell('DISTANZA', 'max 6% da MM',           f'{dist_val:+.1f}%',                                  dist_ok) +
-                ind_cell('SETUP-B',  'P vs 5gg fa',            f'{pct_5d:+.2f}%',                                    setup_ok)
+                ind_cell('ALLIN.',   'MM20>MM50',              mm_str,                                               allin_ok) +
+                ind_cell('PERSIST.', f'≥5gg sopra MM20',       f'{days_ab}gg · slope {"↑" if lc.get("slope_positive") else "↓"}', pers_ok) +
+                ind_cell('MOMENTUM', 'RSI 55–65',              f'RSI={rsi_val:.0f}',                                 rsi_ok) +
+                ind_cell('DISTANZA', 'max 2.5% da MM20',       f'{dist_val:+.1f}%',                                  dist_ok) +
+                ind_cell('ADX',      'ADX > 25',               f'ADX={adx_val:.0f}',                                 adx_ok)
             )
 
             rows_html += f"""
@@ -235,8 +242,10 @@ class AlertSystem:
 
         rsi_val      = cond.get('rsi', 0)
         dist_val     = cond.get('distance_from_ma', 0)
-        pct_5d       = cond.get('pct_vs_5d', 0)
         days_above   = cond.get('days_above_ma', 0)
+        adx_val      = cond.get('adx', 0)
+        mm20_val     = cond.get('mm20_current')
+        mm50_val     = cond.get('mm50_current')
         exit_rule    = cond.get('exit_rule')
         exit_trigger = cond.get('exit_trigger', '–')
 
@@ -245,7 +254,7 @@ class AlertSystem:
             rule_bg    = '#6c757d'
             rule_icon  = '📉'
             rule_title = 'REGOLA 1 — ROTTURA TREND'
-            rule_desc  = 'NAV sceso sotto MM30: il trend primario è terminato.'
+            rule_desc  = 'NAV sceso sotto MM20: il trend primario è terminato.'
         elif exit_rule == 2:
             rule_bg    = '#fd7e14'
             rule_icon  = '🔝'
@@ -265,15 +274,19 @@ class AlertSystem:
                padding:4px 8px;border-radius:4px;display:inline-block;">Trigger: {exit_trigger}</div>
         </div>"""
 
+        mm_detail = (f"MM20={mm20_val:.4f} · MM50={mm50_val:.4f}"
+                     if mm20_val and mm50_val else "MM50 non disponibile")
         cond_rows_html = (
-            cond_row('TREND',    cond.get('trend_ok', False),
-                     f"NAV sopra MM30 da {days_above} gg · slope {'↑' if cond.get('slope_positive') else '↓'}") +
-            cond_row('MOMENTUM', cond.get('rsi_optimal', False),
-                     f"RSI = {rsi_val:.0f} (range 50–72)") +
-            cond_row('DISTANZA', cond.get('distance_ok', False),
-                     f"NAV a {dist_val:.1f}% sopra MM30 (max 6%)") +
-            cond_row('SETUP-B',  cond.get('nav_rising_alt', False),
-                     f"Prezzo vs 5gg fa: {pct_5d:+.2f}%")
+            cond_row('ALLINEAMENTO', cond.get('allineamento_ok', False),
+                     f"Prezzo > MM20 e MM20 > MM50 · {mm_detail}") +
+            cond_row('PERSISTENZA',  cond.get('persistenza_ok', False),
+                     f"NAV sopra MM20 da {days_above} gg (min 5) · slope {'↑' if cond.get('slope_positive') else '↓'}") +
+            cond_row('MOMENTUM',     cond.get('rsi_optimal', False),
+                     f"RSI = {rsi_val:.0f} (range 55–65)") +
+            cond_row('DISTANZA',     cond.get('distance_ok', False),
+                     f"NAV a {dist_val:.1f}% sopra MM20 (max 2.5%)") +
+            cond_row('ADX',          cond.get('adx_ok', False),
+                     f"ADX = {adx_val:.0f} (min 25 — forza trend)")
         ) if cond else '<tr><td colspan="3" style="padding:10px;color:#999;text-align:center;">Dati condizioni non disponibili</td></tr>'
 
         body_html = f"""
